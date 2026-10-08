@@ -145,5 +145,36 @@ public class KmlAnalyzerTests
         Assert.DoesNotContain("\"Route A\"", result.CsvContent);
     }
 
+    [Fact]
+    public void Analyze_MultiGeometry_CountsNestedPoints()
+    {
+        const string kml = """
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <Placemark>
+              <name>Multiple Locations</name>
+              <MultiGeometry>
+                <Point>
+                  <coordinates>-95.3698,29.7604,0</coordinates>
+                </Point>
+                <Point>
+                  <coordinates>-95.38,29.77,10</coordinates>
+                </Point>
+              </MultiGeometry>
+            </Placemark>
+          </Document>
+        </kml>
+        """;
+
+        using var stream = new MemoryStream(
+            Encoding.UTF8.GetBytes(kml));
+
+        var result = new KmlAnalyzer().Analyze(stream);
+
+        Assert.Equal(1, result.PlacemarkCount);
+        Assert.Equal(2, result.PointCount);
+        Assert.Equal(0, result.LineStringCount);
+        Assert.Equal(0, result.PolygonCount);
+    }
 
 }

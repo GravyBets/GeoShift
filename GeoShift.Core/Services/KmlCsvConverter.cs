@@ -63,7 +63,7 @@ public sealed class KmlCsvConverter
 
         foreach (var placemark in placemarks)
         {
-            if (placemark.Element(Kml + "Point") is null)
+            if (!placemark.Descendants(Kml + "Point").Any())
                 continue;
 
             var attributes =
@@ -95,12 +95,12 @@ public sealed class KmlCsvConverter
 
         foreach (var placemark in placemarks)
         {
-            var point = placemark.Element(Kml + "Point");
+            var points = placemark.Descendants(Kml + "Point");
 
-            if (point is null)
-                continue;
+            foreach (var point in points)
+            {
 
-            var coordinates =
+                var coordinates =
                 point.Element(Kml + "coordinates")?.Value;
 
             if (string.IsNullOrWhiteSpace(coordinates))
@@ -198,6 +198,7 @@ public sealed class KmlCsvConverter
                         : EscapeCsv(value))));
 
             exportedPoints++;
+            }
 
         }
 

@@ -350,5 +350,72 @@ public class KmlCsvConverterTests
         Assert.DoesNotContain("\"Area A\"", result.CsvContent);
     }
 
+    [Fact]
+    public void ConvertWithSummary_MultiGeometry_ExportsAllPoints()
+    {
+        const string kml = """
+        <kml xmlns="http://www.opengis.net/kml/2.2">
+          <Document>
+            <Folder>
+              <name>Houston Sites</name>
 
+              <Placemark>
+                <name>Site Alpha</name>
+                <description>Multiple radio locations</description>
+
+                <ExtendedData>
+                  <Data name="Site ID">
+                    <value>TX-001</value>
+                  </Data>
+                </ExtendedData>
+
+                <MultiGeometry>
+                  <Point>
+                    <coordinates>-95.3698,29.7604,0</coordinates>
+                  </Point>
+
+                  <Point>
+                    <coordinates>-95.38,29.77,10</coordinates>
+                  </Point>
+                </MultiGeometry>
+              </Placemark>
+
+            </Folder>
+          </Document>
+        </kml>
+        """;
+
+        using var stream = new MemoryStream(
+            Encoding.UTF8.GetBytes(kml));
+
+        var converter = new KmlCsvConverter();
+        var result = converter.ConvertWithSummary(stream);
+
+        Assert.Equal(2, result.ExportedPointCount);
+        Assert.Equal(0, result.SkippedPointCount);
+        Assert.Equal(1, result.CustomColumnCount);
+        Assert.False(result.HasWarnings);
+
+        var lines = result.CsvContent.Split(
+            new[] { "\r\n", "\n" },
+            StringSplitOptions.RemoveEmptyEntries);
+
+        // Header + two exported point records.
+        Assert.Equal(3, lines.Length);
+
+        Assert.Equal(
+            "\"Name\",\"Folder Path\",\"Latitude\",\"Longitude\"," +
+            "\"Altitude\",\"Description\",\"Site ID\"",
+            lines[0]);
+
+        Assert.Equal(
+            "\"Site Alpha\",\"Houston Sites\",\"29.7604\"," +
+            "\"-95.3698\",\"0\",\"Multiple radio locations\",\"TX-001\"",
+            lines[1]);
+
+        Assert.Equal(
+            "\"Site Alpha\",\"Houston Sites\",\"29.77\"," +
+            "\"-95.38\",\"10\",\"Multiple radio locations\",\"TX-001\"",
+            lines[2]);
+    }
 }
