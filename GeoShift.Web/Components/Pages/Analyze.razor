@@ -1,0 +1,228 @@
+﻿@page "/analyze"
+@rendermode InteractiveServer
+@inject IJSRuntime JS
+
+@using Microsoft.JSInterop
+@using System.Text
+@using GeoShift.Core.Models
+@using GeoShift.Core.Services
+@using Microsoft.AspNetCore.Components.Forms
+
+<PageTitle>Analyze File - GeoShift</PageTitle>
+
+<h1>GeoShift</h1>
+<p>Upload a KML or KMZ file to analyze its contents.</p>
+
+<div class="card p-4 mb-4">
+    <InputFile OnChange="OnFileSelected"
+               accept=".kml,.kmz" />
+
+               
+    <p class="mt-2">
+        Selected file:
+        @(_selectedFile?.Name ?? "NONE")
+    </p>
+
+
+    <button class="btn btn-primary mt-3"
+            @onclick="AnalyzeFile"
+            disabled="@(_selectedFile is null || _isAnalyzing)">
+        @(_isAnalyzing ? "Analyzing..." : "Analyze File")
+    </button>
+</div>
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-danger">
+        @_error
+    </div>
+}
+
+@if (_result is not null)
+{
+    <h3>Analysis Results</h3>
+
+    <div class="row g-3">
+        <div class="col-md-4">
+            <div class="card p-3">
+                <strong>Placemarks</strong>
+                <h2>@_result.PlacemarkCount</h2>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card p-3">
+                <strong>Points</strong>
+                <h2>@_result.PointCount</h2>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card p-3">
+                <strong>Paths</strong>
+                <h2>@_result.LineStringCount</h2>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card p-3">
+                <strong>Polygons</strong>
+                <h2>@_result.PolygonCount</h2>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card p-3">
+                <strong>Folders</strong>
+                <h2>@_result.FolderCount</h2>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_result is not null)
+{
+    <div class="mt-4">
+        <button class="btn btn-success"
+                @onclick="DownloadCsv"
+                disabled="@(_isAnalyzing)">
+            Download CSV
+        </button>
+
+        @if (_result.LineStringCount > 0 ||
+             _result.PolygonCount > 0)
+        {
+            <p class="text-warning mt-2">
+                Note: This CSV export currently includes
+                direct point placemarks only.
+                Paths and polygons are not exported.
+            </p>
+        }
+    </div>
+}
+
+
+@code {
+    private const long MaxFileSize = 50 * 1024 * 1024;
+
+    private IBrowserFile? _selectedFile;
+    private KmlAnalysisResult? _result;
+    private string? _error;
+    private bool _isAnalyzing;
+
+    private void OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _selectedFile = e.File;
+        _result = null;
+        _error = null;
+    }
+
+
+    private async Task AnalyzeFile()
+    {
+        if (_selectedFile is null)
+            return;
+
+        _isAnalyzing = true;
+        _error = null;
+        _result = null;
+
+        try
+        {
+            var extension = Path.GetExtension(_selectedFile.Name)
+                .ToLowerInvariant();
+
+            if (extension is not (".kml" or ".kmz"))
+            {
+                _error = "Please select a KML or KMZ file.";
+                return;
+            }
+
+            if (_selectedFile.Size > MaxFileSize)
+            {
+                _error = "File exceeds the 50 MB limit.";
+                return;
+            }
+
+            await using var source =
+                _selectedFile.OpenReadStream(MaxFileSize);
+
+            using var memory = new MemoryStream();
+            await source.CopyToAsync(memory);
+            memory.Position = 0;
+
+            _result = extension == ".kmz"
+                ? new KmzAnalyzer().Analyze(memory)
+                : new KmlAnalyzer().Analyze(memory);
+        }
+        catch (Exception ex) when (
+            ex is IOException
+            or System.Xml.XmlException
+            or InvalidDataException)
+        {
+            _error = "Unable to analyze this file. " + ex.Message;
+        }
+        finally
+        {
+            _isAnalyzing = false;
+        }
+    }
+
+    
+    private async Task DownloadCsv()
+    {
+        if (_selectedFile is null)
+            return;
+
+        _error = null;
+        _isAnalyzing = true;
+
+        try
+        {
+            var extension = Path.GetExtension(
+                _selectedFile.Name).ToLowerInvariant();
+
+            await using var source =
+                _selectedFile.OpenReadStream(MaxFileSize);
+
+            using var memory = new MemoryStream();
+            await source.CopyToAsync(memory);
+            memory.Position = 0;
+
+            string csv = extension switch
+            {
+                ".kmz" => new KmzAnalyzer().ConvertToCsv(memory),
+                ".kml" => new KmlCsvConverter().Convert(memory),
+                _ => throw new InvalidDataException(
+                    "Unsupported file type.")
+            };
+
+            var bytes = Encoding.UTF8.GetBytes(csv);
+
+            using var csvStream = new MemoryStream(bytes);
+
+            using var streamReference =
+                new DotNetStreamReference(csvStream);
+
+            var fileName = Path.GetFileNameWithoutExtension(
+                _selectedFile.Name) + ".csv";
+
+            await JS.InvokeVoidAsync(
+                "geoShiftDownloadFile",
+                fileName,
+                streamReference);
+        }
+        catch (Exception ex) when (
+            ex is IOException
+            or System.Xml.XmlException
+            or InvalidDataException)
+        {
+            _error = "Unable to convert this file. " + ex.Message;
+        }
+        finally
+        {
+            _isAnalyzing = false;
+        }
+    }
+
+}

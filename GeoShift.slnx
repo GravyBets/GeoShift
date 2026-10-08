@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="GeoShift.Core/GeoShift.Core.csproj" />
+  <Project Path="GeoShift.Tests/GeoShift.Tests.csproj" />
+  <Project Path="GeoShift.Web/GeoShift.Web.csproj" />
+</Solution>
