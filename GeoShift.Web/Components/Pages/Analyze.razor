@@ -17,17 +17,15 @@
     <InputFile OnChange="OnFileSelected"
                accept=".kml,.kmz" />
 
-               
     <p class="mt-2">
         Selected file:
         @(_selectedFile?.Name ?? "NONE")
     </p>
 
-
     <button class="btn btn-primary mt-3"
             @onclick="AnalyzeFile"
             disabled="@(_selectedFile is null || _isAnalyzing)">
-        @(_isAnalyzing ? "Analyzing..." : "Analyze File")
+        @(_isAnalyzing ? "Processing..." : "Analyze File")
     </button>
 </div>
 
@@ -78,35 +76,91 @@
             </div>
         </div>
     </div>
-}
 
-@if (_result is not null)
-{
     <div class="mt-4">
         <button class="btn btn-success"
                 @onclick="DownloadCsv"
-                disabled="@(_isAnalyzing)">
-            Download CSV
+                disabled="@_isAnalyzing">
+            @(_isAnalyzing ? "Converting..." : "Download CSV")
         </button>
-
-        @if (_result.LineStringCount > 0 ||
-             _result.PolygonCount > 0)
-        {
-            <p class="text-warning mt-2">
-                Note: This CSV export currently includes
-                direct point placemarks only.
-                Paths and polygons are not exported.
-            </p>
-        }
     </div>
 }
 
+@if (_conversionResult is not null)
+{
+    <div class="card p-4 mt-4">
+        <h3 class="mb-3">Conversion Summary</h3>
+
+        <div class="alert alert-success">
+            CSV conversion completed successfully.
+        </div>
+
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="card p-3">
+                    <strong>Points Exported</strong>
+                    <h2>@_conversionResult.ExportedPointCount</h2>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card p-3">
+                    <strong>Invalid Points Skipped</strong>
+                    <h2>@_conversionResult.SkippedPointCount</h2>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card p-3">
+                    <strong>Paths Excluded</strong>
+                    <h2>@_conversionResult.ExcludedLineStringCount</h2>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card p-3">
+                    <strong>Polygons Excluded</strong>
+                    <h2>@_conversionResult.ExcludedPolygonCount</h2>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card p-3">
+                    <strong>Custom Columns</strong>
+                    <h2>@_conversionResult.CustomColumnCount</h2>
+                </div>
+            </div>
+        </div>
+
+        @if (_conversionResult.HasWarnings)
+        {
+            <div class="alert alert-warning mt-3 mb-0">
+                <strong>Some data was not exported.</strong>
+                <p class="mb-0 mt-2">
+                    This CSV export includes direct point
+                    placemarks only. Invalid point coordinates
+                    are skipped, and paths and polygons are
+                    excluded. Review the counts above.
+                </p>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-info mt-3 mb-0">
+                All detected direct point placemarks were exported.
+                No paths or polygons were detected.
+            </div>
+        }
+    </div>
+}
 
 @code {
     private const long MaxFileSize = 50 * 1024 * 1024;
 
     private IBrowserFile? _selectedFile;
     private KmlAnalysisResult? _result;
+    private KmlCsvConversionResult? _conversionResult;
+
     private string? _error;
     private bool _isAnalyzing;
 
@@ -114,9 +168,9 @@
     {
         _selectedFile = e.File;
         _result = null;
+        _conversionResult = null;
         _error = null;
     }
-
 
     private async Task AnalyzeFile()
     {
@@ -126,6 +180,7 @@
         _isAnalyzing = true;
         _error = null;
         _result = null;
+        _conversionResult = null;
 
         try
         {
@@ -168,13 +223,13 @@
         }
     }
 
-    
     private async Task DownloadCsv()
     {
         if (_selectedFile is null)
             return;
 
         _error = null;
+        _conversionResult = null;
         _isAnalyzing = true;
 
         try
@@ -189,18 +244,22 @@
             await source.CopyToAsync(memory);
             memory.Position = 0;
 
-            string csv = extension switch
+            var conversion = extension switch
             {
-                ".kmz" => new KmzAnalyzer().ConvertToCsv(memory),
-                ".kml" => new KmlCsvConverter().Convert(memory),
+                ".kmz" => new KmzAnalyzer()
+                    .ConvertToCsvWithSummary(memory),
+
+                ".kml" => new KmlCsvConverter()
+                    .ConvertWithSummary(memory),
+
                 _ => throw new InvalidDataException(
                     "Unsupported file type.")
             };
 
-            var bytes = Encoding.UTF8.GetBytes(csv);
+            var bytes = Encoding.UTF8.GetBytes(
+                conversion.CsvContent);
 
             using var csvStream = new MemoryStream(bytes);
-
             using var streamReference =
                 new DotNetStreamReference(csvStream);
 
@@ -211,6 +270,8 @@
                 "geoShiftDownloadFile",
                 fileName,
                 streamReference);
+
+            _conversionResult = conversion;
         }
         catch (Exception ex) when (
             ex is IOException
@@ -224,5 +285,4 @@
             _isAnalyzing = false;
         }
     }
-
 }

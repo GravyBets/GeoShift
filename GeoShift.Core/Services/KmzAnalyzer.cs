@@ -17,9 +17,17 @@ public sealed class KmzAnalyzer
 
     public string ConvertToCsv(Stream stream)
     {
-        using var kmlStream = ExtractKml(stream);
-        return new KmlCsvConverter().Convert(kmlStream);
+        return ConvertToCsvWithSummary(stream).CsvContent;
     }
+
+    public KmlCsvConversionResult ConvertToCsvWithSummary(Stream stream)
+    {
+        using var kmlStream = ExtractKml(stream);
+
+        return new KmlCsvConverter()
+            .ConvertWithSummary(kmlStream);
+    }
+
 
     private static MemoryStream ExtractKml(Stream stream)
     {
