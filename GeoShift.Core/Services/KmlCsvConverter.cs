@@ -123,7 +123,9 @@ public sealed class KmlCsvConverter
 
             var parts = coordinateTuples[0].Split(',');
 
-            if (parts.Length < 2 ||
+            // KML Point coordinates require longitude,latitude[,altitude].
+            // Reject extra fields rather than silently discarding them.
+            if (parts.Length is < 2 or > 3 ||
                 !double.TryParse(
                     parts[0],
                     NumberStyles.Float,
@@ -150,14 +152,19 @@ public sealed class KmlCsvConverter
 
             var altitude = "";
 
-            if (parts.Length >= 3 &&
-                double.TryParse(
-                    parts[2],
-                    NumberStyles.Float,
-                    CultureInfo.InvariantCulture,
-                    out var parsedAltitude) &&
-                double.IsFinite(parsedAltitude))
+            if (parts.Length == 3)
             {
+                if (!double.TryParse(
+                        parts[2],
+                        NumberStyles.Float,
+                        CultureInfo.InvariantCulture,
+                        out var parsedAltitude) ||
+                    !double.IsFinite(parsedAltitude))
+                {
+                    skippedPoints++;
+                    continue;
+                }
+
                 altitude = parsedAltitude.ToString(
                     "G", CultureInfo.InvariantCulture);
             }
