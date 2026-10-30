@@ -1,7 +1,28 @@
-﻿@page "/"
+@page "/"
+@inject NavigationManager Navigation
 
-<PageTitle>Home</PageTitle>
+<PageTitle>GeoShift — Convert KML &amp; KMZ to CSV</PageTitle>
 
-<h1>Hello, world!</h1>
+<section class="gs-hero">
+    <div class="gs-hero-glow"></div>
+    <div class="gs-container gs-hero-inner">
+        <div class="gs-eyebrow"><span class="gs-eyebrow-dot"></span> GEOSPATIAL DATA, SIMPLIFIED</div>
+        <h1>Your geographic data.<br /><span>Ready for anything.</span></h1>
+        <p class="gs-hero-lead">Turn Google Earth KML and KMZ files into clean, structured CSV data. Analyze, preview, and export in one streamlined workspace.</p>
+        <div class="gs-hero-actions">
+            <a class="gs-btn gs-btn-primary" href="/analyze">Open converter <span aria-hidden="true">↗</span></a>
+            <a class="gs-btn gs-btn-ghost" href="#how-it-works">See how it works <span aria-hidden="true">↓</span></a>
+        </div>
+        <div class="gs-hero-tags"><span>✓ KML &amp; KMZ</span><span>✓ Custom attributes</span><span>✓ Data-quality checks</span></div>
+    </div>
+    <div class="gs-orbit gs-orbit-one"></div><div class="gs-orbit gs-orbit-two"></div>
+</section>
 
-Welcome to your new app.
+<section class="gs-container gs-features" id="how-it-works">
+    <div class="gs-section-heading"><div class="gs-eyebrow">THE WORKFLOW</div><h2>From map files to meaningful data.</h2><p>Everything you need to turn geographic exports into something you can work with.</p></div>
+    <div class="gs-feature-grid">
+        <article class="gs-feature"><span class="gs-feature-icon">01</span><h3>Upload &amp; analyze</h3><p>Understand your file's placemarks, geometry, and folders before converting.</p></article>
+        <article class="gs-feature"><span class="gs-feature-icon">02</span><h3>Preview with confidence</h3><p>Inspect your columns and see which records are included or skipped.</p></article>
+        <article class="gs-feature"><span class="gs-feature-icon">03</span><h3>Export clean CSV</h3><p>Preserve folder paths and custom fields in a spreadsheet-friendly format.</p></article>
+    </div>
+</section>
