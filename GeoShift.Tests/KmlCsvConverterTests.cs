@@ -351,6 +351,62 @@ public class KmlCsvConverterTests
     }
 
     [Fact]
+    public void ConvertWithSummary_PointWithMultipleCoordinateTuples_IsSkipped()
+    {
+        const string kml = """
+            <kml xmlns="http://www.opengis.net/kml/2.2">
+              <Document>
+                <Placemark>
+                  <name>Ambiguous Point</name>
+                  <Point>
+                    <coordinates>-95.3,29.7 -95.4,29.8</coordinates>
+                  </Point>
+                </Placemark>
+                <Placemark>
+                  <name>Valid Point</name>
+                  <Point>
+                    <coordinates>-95.5,29.9</coordinates>
+                  </Point>
+                </Placemark>
+              </Document>
+            </kml>
+            """;
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(kml));
+        var result = new KmlCsvConverter().ConvertWithSummary(stream);
+
+        Assert.Equal(1, result.ExportedPointCount);
+        Assert.Equal(1, result.SkippedPointCount);
+        Assert.True(result.HasWarnings);
+        Assert.Contains("\"Valid Point\"", result.CsvContent);
+        Assert.DoesNotContain("\"Ambiguous Point\"", result.CsvContent);
+    }
+
+    [Fact]
+    public void ConvertWithSummary_PointWithWhitespaceAroundSingleTuple_Exports()
+    {
+        const string kml = """
+            <kml xmlns="http://www.opengis.net/kml/2.2">
+              <Placemark>
+                <name>Whitespace Point</name>
+                <Point>
+                  <coordinates>
+                    -95.3,29.7,0
+                  </coordinates>
+                </Point>
+              </Placemark>
+            </kml>
+            """;
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(kml));
+        var result = new KmlCsvConverter().ConvertWithSummary(stream);
+
+        Assert.Equal(1, result.ExportedPointCount);
+        Assert.Equal(0, result.SkippedPointCount);
+        Assert.Contains("\"Whitespace Point\"", result.CsvContent);
+    }
+
+    [Fact]
     public void ConvertWithSummary_MultiGeometry_ExportsAllPoints()
     {
         const string kml = """
