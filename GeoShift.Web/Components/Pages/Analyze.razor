@@ -17,11 +17,13 @@
 
     <section class="gs-panel">
         <div class="gs-panel-heading"><h2>Upload your file</h2><span class="gs-step">STEP 01</span></div>
-        <div class="gs-dropzone" id="gs-file-dropzone" aria-label="Drop a KML or KMZ file here, or browse to select one">
-            <div class="gs-upload-icon" aria-hidden="true">↑</div>
+        <div class="gs-dropzone" id="gs-file-dropzone" role="button" tabindex="0" aria-label="Choose or drop a KML or KMZ file">
+            <div class="gs-upload-icon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V3m0 0L7 8m5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></div>
             <strong>Drag &amp; drop your KML or KMZ file here</strong>
-            <p>or browse below · Google Earth exports · Maximum 50 MB</p>
-            <InputFile @key="_fileInputKey" OnChange="OnFileSelected" accept=".kml,.kmz" disabled="@_isAnalyzing" aria-label="Select a KML or KMZ file" />
+            <p>Drop a file anywhere in this area, or select one from your computer</p>
+            <span class="gs-browse-btn" aria-hidden="true">Browse files <span>↗</span></span>
+            <small class="gs-upload-hint">KML or KMZ · Up to 50 MB</small>
+            <InputFile @key="_fileInputKey" OnChange="OnFileSelected" accept=".kml,.kmz" disabled="@_isAnalyzing" class="gs-hidden-file-input" aria-label="Select a KML or KMZ file" />
         </div>
         @if (_selectedFile is not null)
         {
