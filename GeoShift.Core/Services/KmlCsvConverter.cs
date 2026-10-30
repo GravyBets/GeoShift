@@ -109,18 +109,19 @@ public sealed class KmlCsvConverter
                 continue;
             }
 
-            var coordinate = coordinates.Split(
+            var coordinateTuples = coordinates.Split(
                 (char[]?)null,
-                StringSplitOptions.RemoveEmptyEntries)
-                .FirstOrDefault();
+                StringSplitOptions.RemoveEmptyEntries);
 
-            if (coordinate is null)
+            // A KML Point must have exactly one coordinate tuple.
+            // Never silently discard additional tuples.
+            if (coordinateTuples.Length != 1)
             {
                 skippedPoints++;
                 continue;
             }
 
-            var parts = coordinate.Split(',');
+            var parts = coordinateTuples[0].Split(',');
 
             if (parts.Length < 2 ||
                 !double.TryParse(
