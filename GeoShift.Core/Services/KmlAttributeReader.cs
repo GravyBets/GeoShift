@@ -29,7 +29,7 @@ public static class KmlAttributeReader
             var value = data.Element(Kml + "value")?.Value.Trim() ?? "";
 
             if (!string.IsNullOrWhiteSpace(name))
-                attributes[name] = value;
+                AddAttribute(attributes, name, value);
         }
 
         // SchemaData/SimpleData elements.
@@ -42,10 +42,31 @@ public static class KmlAttributeReader
                 var name = data.Attribute("name")?.Value?.Trim();
 
                 if (!string.IsNullOrWhiteSpace(name))
-                    attributes[name] = data.Value.Trim();
+                    AddAttribute(attributes, name, data.Value.Trim());
             }
         }
 
         return attributes;
+    }
+
+    private static void AddAttribute(
+        Dictionary<string, string> attributes,
+        string name,
+        string value)
+    {
+        if (attributes.TryGetValue(name, out var existingValue))
+        {
+            if (!string.Equals(existingValue, value, StringComparison.Ordinal))
+            {
+                throw new InvalidDataException(
+                    $"Conflicting values for custom attribute '{name}'. " +
+                    "The KML placemark contains duplicate field names " +
+                    "with different values.");
+            }
+
+            return;
+        }
+
+        attributes.Add(name, value);
     }
 }
