@@ -123,3 +123,27 @@ html,body { font-family:Inter,"Segoe UI",Arial,sans-serif; background:#f8faff; c
 .gs-quality .alert { border-radius:12px; }
 @media(max-width:850px){.gs-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.gs-feature-grid{grid-template-columns:1fr}.gs-hero-inner{padding:82px 0 95px}}
 @media(max-width:540px){.gs-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.gs-panel{padding:18px}.gs-workspace{padding-top:36px}.gs-hero-tags{gap:12px}.gs-action-row button{width:100%}}
+
+/* Interactive file upload */
+.gs-dropzone { cursor:copy; }
+.gs-dropzone-active, .gs-dropzone.gs-dropzone-active:focus-within {
+    border-color:#2869e8;
+    background:#eaf2ff;
+    box-shadow:0 0 0 5px #2869e812, inset 0 0 0 1px #2869e830;
+    transform:scale(1.005);
+}
+.gs-clear-file {
+    margin-left:auto;
+    border:1px solid #e2e9f3;
+    background:#fff;
+    color:#60738e;
+    border-radius:9px;
+    padding:7px 12px;
+    font-size:.8rem;
+    font-weight:700;
+    cursor:pointer;
+    white-space:nowrap;
+}
+.gs-clear-file:hover:not(:disabled) { color:#bd3f48; border-color:#f0c5c8; background:#fff8f8; }
+.gs-clear-file:disabled { opacity:.5; cursor:not-allowed; }
+@media(max-width:540px) { .gs-file-info { flex-wrap:wrap; } .gs-clear-file { margin-left:0; } }
