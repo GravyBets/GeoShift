@@ -58,3 +58,68 @@ h1:focus {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+/* GeoShift product design system */
+:root { --gs-ink:#12213b; --gs-muted:#718099; --gs-blue:#2869e8; --gs-line:#e5ebf4; }
+html { scroll-behavior:smooth; }
+html,body { font-family:Inter,"Segoe UI",Arial,sans-serif; background:#f8faff; color:var(--gs-ink); }
+.gs-container { width:min(1160px,calc(100% - 44px)); margin:0 auto; }
+.gs-hero { position:relative; overflow:hidden; background:linear-gradient(125deg,#f5f9ff 0%,#f8fbff 55%,#edf6ff 100%); border-bottom:1px solid #e5edf8; }
+.gs-hero-inner { position:relative; z-index:1; padding:112px 0 122px; }
+.gs-eyebrow { color:#2b6ee9; font-size:.73rem; font-weight:800; letter-spacing:.15em; display:flex; align-items:center; gap:10px; }
+.gs-eyebrow-dot { width:8px;height:8px;background:#2b6ee9;border-radius:50%;box-shadow:0 0 0 5px #2b6ee918; }
+.gs-hero h1 { font-size:clamp(2.7rem,5.7vw,5.3rem);line-height:1.09;letter-spacing:-.065em;font-weight:800;margin:26px 0 24px;max-width:850px; }
+.gs-hero h1 span { color:#276be7; }
+.gs-hero-lead { font-size:1.16rem;line-height:1.8;color:#66768e;max-width:660px; }
+.gs-hero-actions { display:flex;gap:12px;flex-wrap:wrap;margin:34px 0 32px; }
+.gs-btn { border-radius:12px;padding:14px 22px;font-size:.95rem;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:14px;border:1px solid transparent;transition:transform .15s,box-shadow .15s;cursor:pointer; }
+.gs-btn:hover { transform:translateY(-1px); }
+.gs-btn-primary { background:#2869e8;color:white;box-shadow:0 9px 24px #2869e82b; }
+.gs-btn-primary:hover { color:white;background:#195ad8; }
+.gs-btn-ghost { color:#3e5270;background:white;border-color:#e0e7f1; }
+.gs-btn-ghost:hover { color:#2869e8; }
+.gs-hero-tags { display:flex;gap:25px;flex-wrap:wrap;color:#63768f;font-size:.83rem;font-weight:600; }
+.gs-orbit { position:absolute;right:-170px;top:-150px;border:1px solid #73a4f129;border-radius:50%;width:660px;height:660px;pointer-events:none; }
+.gs-orbit-two { right:-70px;top:-50px;width:460px;height:460px;border-color:#73a4f140; }
+.gs-features { padding:88px 0 108px; }
+.gs-section-heading { max-width:690px;margin-bottom:34px; }
+.gs-section-heading h2 { font-size:clamp(2rem,3vw,2.8rem);font-weight:800;letter-spacing:-.05em;margin:14px 0; }
+.gs-section-heading p { color:var(--gs-muted); }
+.gs-feature-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px; }
+.gs-feature { background:white;border:1px solid var(--gs-line);border-radius:18px;padding:30px;box-shadow:0 12px 32px #19335c06; }
+.gs-feature-icon { display:grid;place-items:center;width:46px;height:46px;border-radius:13px;background:#eaf2ff;color:#2769e8;font-weight:800;font-size:.9rem;margin-bottom:24px; }
+.gs-feature h3 { font-size:1.1rem;font-weight:800;letter-spacing:-.025em; }
+.gs-feature p { color:var(--gs-muted);line-height:1.75;margin:12px 0 0;font-size:.91rem; }
+.gs-workspace { padding:56px 0 100px; }
+.gs-page-kicker { color:#2869e8;font-size:.73rem;font-weight:800;letter-spacing:.13em;text-transform:uppercase;margin-bottom:12px; }
+.gs-page-title { font-size:clamp(2rem,4vw,3.15rem);font-weight:800;letter-spacing:-.055em;margin:0 0 12px; }
+.gs-page-description { color:var(--gs-muted);font-size:1rem;line-height:1.7;margin-bottom:34px; }
+.gs-panel { background:white;border:1px solid var(--gs-line);border-radius:18px;padding:28px;box-shadow:0 14px 40px #1b386509;margin-bottom:24px; }
+.gs-panel-heading { display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:22px; }
+.gs-panel-heading h2 { font-size:1.18rem;font-weight:800;letter-spacing:-.025em;margin:0; }
+.gs-step { color:#6c84a8;background:#f2f6fc;border-radius:100px;padding:7px 12px;font-size:.72rem;font-weight:700; }
+.gs-dropzone { display:flex;flex-direction:column;align-items:center;text-align:center;gap:9px;padding:38px 20px;border:2px dashed #b7c9e5;background:linear-gradient(180deg,#f9fbff,#f4f8ff);border-radius:15px;transition:border-color .2s,background .2s; }
+.gs-dropzone:focus-within { border-color:#2869e8;background:#edf5ff; }
+.gs-upload-icon { display:grid;place-items:center;width:56px;height:56px;border-radius:17px;background:#e5efff;color:#2869e8;font-size:1.7rem;margin-bottom:8px; }
+.gs-dropzone strong { font-size:1.04rem; }
+.gs-dropzone p { margin:0;color:#8a99ae;font-size:.82rem; }
+.gs-dropzone input[type=file] { width:min(100%,330px);font-size:.86rem;margin-top:12px; }
+.gs-file-info { margin-top:18px;display:flex;align-items:center;gap:10px;color:#41607d;font-size:.9rem;word-break:break-word; }
+.gs-action-row { display:flex;flex-wrap:wrap;gap:12px;margin-top:22px; }
+.gs-action-row button { min-height:45px;border-radius:10px;font-weight:700;padding:10px 20px; }
+.gs-action-row .btn-primary { background:#2869e8;border-color:#2869e8; }
+.gs-action-row .btn-success { background:#102a4e;border-color:#102a4e; }
+.gs-stats { display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px; }
+.gs-stat { padding:20px;border:1px solid #e8edf5;background:#fbfcff;border-radius:13px; }
+.gs-stat-label { color:#75869e;font-size:.79rem;font-weight:650; }
+.gs-stat-value { font-size:1.85rem;font-weight:800;letter-spacing:-.05em;margin-top:6px; }
+.gs-stat.small-stat .gs-stat-value { font-size:1.55rem; }
+.gs-preview-table { max-height:480px;overflow:auto;border:1px solid var(--gs-line);border-radius:12px; }
+.gs-preview-table table { margin:0;font-size:.85rem; }
+.gs-preview-table th { background:#f1f5fc;color:#536784;white-space:nowrap;font-size:.76rem;text-transform:uppercase;letter-spacing:.035em;position:sticky;top:0; }
+.gs-preview-table td,.gs-preview-table th { padding:12px 15px;vertical-align:top;border-color:#eaf0f7; }
+.gs-note { color:#8795a9;font-size:.84rem;margin:0 0 20px; }
+.gs-quality { margin-top:22px; }
+.gs-quality .alert { border-radius:12px; }
+@media(max-width:850px){.gs-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.gs-feature-grid{grid-template-columns:1fr}.gs-hero-inner{padding:82px 0 95px}}
+@media(max-width:540px){.gs-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.gs-panel{padding:18px}.gs-workspace{padding-top:36px}.gs-hero-tags{gap:12px}.gs-action-row button{width:100%}}
