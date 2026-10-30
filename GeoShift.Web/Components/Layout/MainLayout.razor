@@ -1,23 +1,25 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
 
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
-
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
-
-        <article class="content px-4">
-            @Body
-        </article>
-    </main>
+<div class="gs-shell">
+    <header class="gs-header">
+        <a class="gs-brand" href="/" aria-label="GeoShift home">
+            <span class="gs-brand-mark">G<span>↗</span></span>
+            <span>Geo<span class="gs-brand-accent">Shift</span></span>
+        </a>
+        <nav class="gs-nav" aria-label="Main navigation">
+            <NavLink href="/" Match="NavLinkMatch.All">Workspace</NavLink>
+            <a href="/#how-it-works">How it works</a>
+            <span class="gs-nav-status"><span class="gs-status-dot"></span> Local preview</span>
+        </nav>
+    </header>
+    <main class="gs-main">@Body</main>
+    <footer class="gs-footer">
+        <span>© @DateTime.UtcNow.Year GeoShift</span>
+        <span>Geospatial data, made useful.</span>
+    </footer>
 </div>
 
 <div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
-    <span class="dismiss">🗙</span>
+    An unexpected error occurred. <a href="." class="reload">Reload</a>
+    <span class="dismiss">✕</span>
 </div>
