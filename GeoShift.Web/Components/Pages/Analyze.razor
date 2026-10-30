@@ -78,11 +78,49 @@
     </div>
 
     <div class="mt-4">
+        <button class="btn btn-outline-primary me-2"
+                @onclick="PreviewCsv"
+                disabled="@_isAnalyzing">
+            @(_isAnalyzing ? "Processing..." : "Preview CSV")
+        </button>
         <button class="btn btn-success"
                 @onclick="DownloadCsv"
                 disabled="@_isAnalyzing">
             @(_isAnalyzing ? "Converting..." : "Download CSV")
         </button>
+    </div>
+}
+
+@if (_previewRows is not null && _previewRows.Count > 0)
+{
+    <div class="card p-4 mt-4">
+        <h3>CSV Preview</h3>
+        <p class="text-muted">
+            Showing up to 10 exported records. Download the CSV for the full dataset.
+        </p>
+        <div class="table-responsive">
+            <table class="table table-striped table-bordered table-sm">
+                <thead>
+                    <tr>
+                        @foreach (var header in _previewRows[0])
+                        {
+                            <th scope="col">@header</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var record in _previewRows.Skip(1))
+                    {
+                        <tr>
+                            @foreach (var value in record)
+                            {
+                                <td style="white-space: pre-wrap;">@value</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
     </div>
 }
 
@@ -160,6 +198,7 @@
     private IBrowserFile? _selectedFile;
     private KmlAnalysisResult? _result;
     private KmlCsvConversionResult? _conversionResult;
+    private IReadOnlyList<IReadOnlyList<string>>? _previewRows;
 
     private string? _error;
     private bool _isAnalyzing;
@@ -169,6 +208,8 @@
         _selectedFile = e.File;
         _result = null;
         _conversionResult = null;
+        _previewRows = null;
+        _previewRows = null;
         _error = null;
     }
 
@@ -216,6 +257,47 @@
             or InvalidDataException)
         {
             _error = "Unable to analyze this file. " + ex.Message;
+        }
+        finally
+        {
+            _isAnalyzing = false;
+        }
+    }
+
+    private async Task PreviewCsv()
+    {
+        if (_selectedFile is null)
+            return;
+
+        _error = null;
+        _conversionResult = null;
+        _previewRows = null;
+        _isAnalyzing = true;
+
+        try
+        {
+            var extension = Path.GetExtension(_selectedFile.Name)
+                .ToLowerInvariant();
+
+            await using var source = _selectedFile.OpenReadStream(MaxFileSize);
+            using var memory = new MemoryStream();
+            await source.CopyToAsync(memory);
+            memory.Position = 0;
+
+            var conversion = extension switch
+            {
+                ".kmz" => new KmzAnalyzer().ConvertToCsvWithSummary(memory),
+                ".kml" => new KmlCsvConverter().ConvertWithSummary(memory),
+                _ => throw new InvalidDataException("Unsupported file type.")
+            };
+
+            _previewRows = CsvPreviewReader.Read(conversion.CsvContent);
+            _conversionResult = conversion;
+        }
+        catch (Exception ex) when (
+            ex is IOException or System.Xml.XmlException or InvalidDataException)
+        {
+            _error = "Unable to preview this file. " + ex.Message;
         }
         finally
         {
