@@ -56,11 +56,16 @@ public sealed class KmlCsvConverter
 
         // Discover custom fields dynamically.
         // Only point placemarks are exported in V1.
-        var customColumns = new List<string>();
-        var seenColumns = new HashSet<string>(
+        var customColumns = new List<(string SourceName, string Header)>();
+        var seenSourceNames = new HashSet<string>(
+            StringComparer.OrdinalIgnoreCase);
+        var reservedHeaders = new HashSet<string>(
             StandardColumns,
             StringComparer.OrdinalIgnoreCase);
 
+        // Discover all custom names first, so a generated header cannot
+        // take the name of another customer's actual custom field.
+        var customNames = new List<string>();
         foreach (var placemark in placemarks)
         {
             if (!placemark.Descendants(Kml + "Point").Any())
@@ -71,9 +76,35 @@ public sealed class KmlCsvConverter
 
             foreach (var name in attributes.Keys)
             {
-                if (seenColumns.Add(name))
-                    customColumns.Add(name);
+                if (seenSourceNames.Add(name))
+                    customNames.Add(name);
             }
+        }
+
+        foreach (var name in customNames)
+            reservedHeaders.Add(name);
+
+        var usedHeaders = new HashSet<string>(
+            StandardColumns,
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var name in customNames)
+        {
+            var header = name;
+            if (!usedHeaders.Add(header))
+            {
+                var baseHeader = "ExtendedData: " + name;
+                header = baseHeader;
+                int suffix = 2;
+
+                while (reservedHeaders.Contains(header) ||
+                       !usedHeaders.Add(header))
+                {
+                    header = baseHeader + " (" + suffix++ + ")";
+                }
+            }
+
+            customColumns.Add((name, header));
         }
 
         int exportedPoints = 0;
@@ -90,7 +121,7 @@ public sealed class KmlCsvConverter
         var csv = new StringBuilder();
 
         csv.AppendLine(string.Join(",",
-            StandardColumns.Concat(customColumns)
+            StandardColumns.Concat(customColumns.Select(column => column.Header))
                 .Select(EscapeCsv)));
 
         foreach (var placemark in placemarks)
@@ -195,7 +226,7 @@ public sealed class KmlCsvConverter
             foreach (var column in customColumns)
             {
                 values.Add(
-                    attributes.GetValueOrDefault(column) ?? "");
+                    attributes.GetValueOrDefault(column.SourceName) ?? "");
             }
 
 
