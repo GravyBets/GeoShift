@@ -147,3 +147,16 @@ html,body { font-family:Inter,"Segoe UI",Arial,sans-serif; background:#f8faff; c
 .gs-clear-file:hover:not(:disabled) { color:#bd3f48; border-color:#f0c5c8; background:#fff8f8; }
 .gs-clear-file:disabled { opacity:.5; cursor:not-allowed; }
 @media(max-width:540px) { .gs-file-info { flex-wrap:wrap; } .gs-clear-file { margin-left:0; } }
+
+/* Step 20 — polished, accessible upload surface */
+.gs-dropzone { cursor:pointer; padding:44px 20px 38px; gap:12px; }
+.gs-dropzone:hover:not(.gs-dropzone-active) { border-color:#7da9ee; background:#f0f6ff; }
+.gs-dropzone:focus-visible { outline:3px solid #2869e8; outline-offset:4px; }
+.gs-dropzone .gs-upload-icon { width:68px;height:68px;border-radius:20px;box-shadow:0 9px 25px #2769e815;margin-bottom:9px; }
+.gs-dropzone strong { font-size:1.13rem;letter-spacing:-.02em; }
+.gs-dropzone p { max-width:380px;line-height:1.6; }
+.gs-browse-btn { display:inline-flex;align-items:center;gap:16px;background:#2869e8;color:white;border-radius:10px;padding:12px 19px;font-size:.88rem;font-weight:750;margin-top:10px;box-shadow:0 8px 20px #2869e826;pointer-events:none; }
+.gs-dropzone:hover .gs-browse-btn { background:#1c5dd5; }
+.gs-upload-hint { color:#8a99ae;font-size:.77rem;margin-top:2px; }
+.gs-dropzone input.gs-hidden-file-input { position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:0!important;opacity:0!important;overflow:hidden!important;clip-path:inset(50%)!important;white-space:nowrap!important;pointer-events:none!important; }
+.gs-dropzone:has(input:disabled) { opacity:.7;cursor:wait; }
