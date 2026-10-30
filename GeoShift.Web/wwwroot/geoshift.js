@@ -25,6 +25,23 @@ window.geoShiftSetupDropzone = (id) => {
     zone.dataset.dropReady = "true";
     let dragDepth = 0;
 
+    const getInput = () => zone.querySelector('input[type="file"]');
+    const openPicker = () => {
+        const input = getInput();
+        if (input && !input.disabled) input.click();
+    };
+
+    zone.addEventListener("click", (event) => {
+        if (event.target.closest('input[type="file"]')) return;
+        openPicker();
+    });
+
+    zone.addEventListener("keydown", (event) => {
+        if (event.target !== zone || !["Enter", " "].includes(event.key)) return;
+        event.preventDefault();
+        openPicker();
+    });
+
     zone.addEventListener("dragenter", (event) => {
         if (!event.dataTransfer?.types.includes("Files")) return;
         event.preventDefault();
@@ -49,7 +66,7 @@ window.geoShiftSetupDropzone = (id) => {
         dragDepth = 0;
         zone.classList.remove("gs-dropzone-active");
 
-        const input = zone.querySelector('input[type="file"]');
+        const input = getInput();
         if (!input || input.disabled) return;
 
         const files = event.dataTransfer?.files;
