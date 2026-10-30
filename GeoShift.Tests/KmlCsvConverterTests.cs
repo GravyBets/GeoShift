@@ -466,6 +466,66 @@ public class KmlCsvConverterTests
     }
 
     [Fact]
+    public void Convert_CustomFieldNamedLikeStandardColumn_PreservesBoth()
+    {
+        const string kml = """
+            <kml xmlns="http://www.opengis.net/kml/2.2">
+              <Placemark>
+                <name>Site Alpha</name>
+                <ExtendedData>
+                  <Data name="Name"><value>Asset-123</value></Data>
+                  <Data name="Latitude"><value>Customer Zone</value></Data>
+                </ExtendedData>
+                <Point><coordinates>-95.3,29.7</coordinates></Point>
+              </Placemark>
+            </kml>
+            """;
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(kml));
+        var result = new KmlCsvConverter().ConvertWithSummary(stream);
+        var lines = result.CsvContent.Split(
+            new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+
+        Assert.Equal(1, result.ExportedPointCount);
+        Assert.Equal(2, result.CustomColumnCount);
+        Assert.Equal(2, lines.Length);
+        Assert.Contains("\"ExtendedData: Name\"", lines[0]);
+        Assert.Contains("\"ExtendedData: Latitude\"", lines[0]);
+        Assert.Contains("\"Site Alpha\"", lines[1]);
+        Assert.Contains("\"29.7\",\"-95.3\"", lines[1]);
+        Assert.Contains("\"Asset-123\"", lines[1]);
+        Assert.Contains("\"Customer Zone\"", lines[1]);
+    }
+
+    [Fact]
+    public void Convert_GeneratedHeaderDoesNotOverwriteActualCustomHeader()
+    {
+        const string kml = """
+            <kml xmlns="http://www.opengis.net/kml/2.2">
+              <Placemark>
+                <name>Site Alpha</name>
+                <ExtendedData>
+                  <Data name="Name"><value>Asset-123</value></Data>
+                  <Data name="ExtendedData: Name"><value>Original Field</value></Data>
+                </ExtendedData>
+                <Point><coordinates>-95.3,29.7</coordinates></Point>
+              </Placemark>
+            </kml>
+            """;
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(kml));
+        var result = new KmlCsvConverter().ConvertWithSummary(stream);
+        var lines = result.CsvContent.Split(
+            new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+
+        Assert.Equal(2, result.CustomColumnCount);
+        Assert.Contains("\"ExtendedData: Name (2)\"", lines[0]);
+        Assert.Contains("\"ExtendedData: Name\"", lines[0]);
+        Assert.Contains("\"Asset-123\"", lines[1]);
+        Assert.Contains("\"Original Field\"", lines[1]);
+    }
+
+    [Fact]
     public void ConvertWithSummary_MultiGeometry_ExportsAllPoints()
     {
         const string kml = """
