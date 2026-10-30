@@ -406,6 +406,65 @@ public class KmlCsvConverterTests
         Assert.Contains("\"Whitespace Point\"", result.CsvContent);
     }
 
+    [Theory]
+    [InlineData("-95.3,29.7,not-a-number")]
+    [InlineData("-95.3,29.7,NaN")]
+    [InlineData("-95.3,29.7,Infinity")]
+    [InlineData("-95.3,29.7,0,extra")]
+    [InlineData("-95.3,29.7,")]
+    public void ConvertWithSummary_InvalidAltitudeOrExtraFields_SkipsPoint(
+        string coordinates)
+    {
+        var kml = $"""
+            <kml xmlns="http://www.opengis.net/kml/2.2">
+              <Placemark>
+                <name>Malformed Altitude</name>
+                <Point><coordinates>{coordinates}</coordinates></Point>
+              </Placemark>
+            </kml>
+            """;
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(kml));
+        var result = new KmlCsvConverter().ConvertWithSummary(stream);
+
+        Assert.Equal(0, result.ExportedPointCount);
+        Assert.Equal(1, result.SkippedPointCount);
+        Assert.True(result.HasWarnings);
+        Assert.DoesNotContain("\"Malformed Altitude\"", result.CsvContent);
+    }
+
+    [Fact]
+    public void ConvertWithSummary_SpecialCharacters_PreservesCsvValues()
+    {
+        const string kml = """
+            <kml xmlns="http://www.opengis.net/kml/2.2">
+              <Document>
+                <Placemark>
+                  <name>Café, "North"</name>
+                  <description>Line one
+            Line two, with comma</description>
+                  <ExtendedData>
+                    <Data name="Equipment, Type">
+                      <value>Rádio "A", série</value>
+                    </Data>
+                  </ExtendedData>
+                  <Point><coordinates>-95.3,29.7</coordinates></Point>
+                </Placemark>
+              </Document>
+            </kml>
+            """;
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(kml));
+        var result = new KmlCsvConverter().ConvertWithSummary(stream);
+
+        Assert.Equal(1, result.ExportedPointCount);
+        Assert.Equal(1, result.CustomColumnCount);
+        Assert.Contains("\"Café, \"\"North\"\"\"", result.CsvContent);
+        Assert.Contains("\"Equipment, Type\"", result.CsvContent);
+        Assert.Contains("\"Rádio \"\"A\"\", série\"", result.CsvContent);
+        Assert.Contains("Line one\nLine two, with comma", result.CsvContent);
+    }
+
     [Fact]
     public void ConvertWithSummary_MultiGeometry_ExportsAllPoints()
     {
