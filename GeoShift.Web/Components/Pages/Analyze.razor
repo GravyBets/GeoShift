@@ -137,17 +137,17 @@
             <div class="alert alert-warning mt-3 mb-0">
                 <strong>Some data was not exported.</strong>
                 <p class="mb-0 mt-2">
-                    This CSV export includes direct point
-                    placemarks only. Invalid point coordinates
-                    are skipped, and paths and polygons are
-                    excluded. Review the counts above.
+                    This CSV export includes points, including those
+                    nested inside MultiGeometry. Invalid point
+                    coordinates are skipped, and paths and polygons
+                    are excluded. Review the counts above.
                 </p>
             </div>
         }
         else
         {
             <div class="alert alert-info mt-3 mb-0">
-                All detected direct point placemarks were exported.
+                All detected points were exported.
                 No paths or polygons were detected.
             </div>
         }
