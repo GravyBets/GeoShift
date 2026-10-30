@@ -17,15 +17,15 @@
 
     <section class="gs-panel">
         <div class="gs-panel-heading"><h2>Upload your file</h2><span class="gs-step">STEP 01</span></div>
-        <div class="gs-dropzone">
+        <div class="gs-dropzone" id="gs-file-dropzone" aria-label="Drop a KML or KMZ file here, or browse to select one">
             <div class="gs-upload-icon" aria-hidden="true">↑</div>
-            <strong>Choose a KML or KMZ file</strong>
-            <p>Google Earth exports · Maximum 50 MB</p>
-            <InputFile OnChange="OnFileSelected" accept=".kml,.kmz" aria-label="Select a KML or KMZ file" />
+            <strong>Drag &amp; drop your KML or KMZ file here</strong>
+            <p>or browse below · Google Earth exports · Maximum 50 MB</p>
+            <InputFile @key="_fileInputKey" OnChange="OnFileSelected" accept=".kml,.kmz" disabled="@_isAnalyzing" aria-label="Select a KML or KMZ file" />
         </div>
         @if (_selectedFile is not null)
         {
-            <div class="gs-file-info"><span aria-hidden="true">📄</span><strong>@_selectedFile.Name</strong><span>· @((_selectedFile.Size / 1024.0).ToString("N1")) KB</span></div>
+            <div class="gs-file-info"><span aria-hidden="true">📄</span><strong>@_selectedFile.Name</strong><span>· @((_selectedFile.Size / 1024.0).ToString("N1")) KB</span><button type="button" class="gs-clear-file" @onclick="ClearFile" disabled="@_isAnalyzing" aria-label="Clear selected file">✕ Remove</button></div>
         }
         <div class="gs-action-row">
             <button class="btn btn-primary" @onclick="AnalyzeFile" disabled="@(_selectedFile is null || _isAnalyzing)">
@@ -128,6 +128,25 @@
 
     private string? _error;
     private bool _isAnalyzing;
+    private int _fileInputKey;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await JS.InvokeVoidAsync("geoShiftSetupDropzone", "gs-file-dropzone");
+    }
+
+    private void ClearFile()
+    {
+        if (_isAnalyzing)
+            return;
+
+        _selectedFile = null;
+        _result = null;
+        _conversionResult = null;
+        _previewRows = null;
+        _error = null;
+        _fileInputKey++;
+    }
 
     private void OnFileSelected(InputFileChangeEventArgs e)
     {
