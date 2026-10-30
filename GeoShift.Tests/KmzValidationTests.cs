@@ -70,6 +70,49 @@ public class KmzValidationTests
             () => new KmzAnalyzer().Analyze(stream));
     }
 
+    [Fact]
+    public void Analyze_WithoutDocKml_UsesFirstKmlEntry()
+    {
+        const string kml = """
+            <kml xmlns="http://www.opengis.net/kml/2.2">
+              <Document>
+                <Placemark>
+                  <Point><coordinates>-95.3,29.7</coordinates></Point>
+                </Placemark>
+              </Document>
+            </kml>
+            """;
+
+        using var archiveStream = CreateArchive(
+            ("notes.txt", "Metadata"),
+            ("nested/sites.kml", kml));
+
+        var result = new KmzAnalyzer().Analyze(archiveStream);
+
+        Assert.Equal(1, result.PointCount);
+        Assert.Equal(1, result.PlacemarkCount);
+    }
+
+    [Fact]
+    public void Analyze_KmlWithDtd_RejectsExternalEntities()
+    {
+        const string kml = """
+            <!DOCTYPE kml [
+              <!ENTITY external SYSTEM "file:///nonexistent-geoshift-secret">
+            ]>
+            <kml xmlns="http://www.opengis.net/kml/2.2">
+              <Document>
+                <name>&external;</name>
+              </Document>
+            </kml>
+            """;
+
+        using var archiveStream = CreateArchive(("doc.kml", kml));
+
+        Assert.Throws<System.Xml.XmlException>(
+            () => new KmzAnalyzer().Analyze(archiveStream));
+    }
+
     private static MemoryStream CreateArchive(
         params (string Name, string Content)[] entries)
     {
