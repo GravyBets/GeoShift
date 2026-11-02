@@ -1,12 +1,12 @@
-﻿
 using System.Xml;
-using System.Xml.Linq;
 using GeoShift.Core.Models;
 
 namespace GeoShift.Core.Services;
 
 public sealed class KmlAnalyzer
 {
+    private const string KmlNamespace = "http://www.opengis.net/kml/2.2";
+
     public KmlAnalysisResult Analyze(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -15,36 +15,47 @@ public sealed class KmlAnalyzer
         {
             DtdProcessing = DtdProcessing.Prohibit,
             XmlResolver = null,
-            MaxCharactersInDocument = 20_000_000
+            IgnoreComments = true,
+            IgnoreProcessingInstructions = true,
+            MaxCharactersInDocument = 0 // Byte limits are enforced at the KMZ extraction boundary.
         };
 
         using var reader = XmlReader.Create(stream, settings);
-        var document = XDocument.Load(reader);
+        reader.MoveToContent();
 
-        XNamespace kml = "http://www.opengis.net/kml/2.2";
-
-        if (document.Root?.Name != kml + "kml")
+        if (reader.NodeType != XmlNodeType.Element ||
+            reader.LocalName != "kml" ||
+            reader.NamespaceURI != KmlNamespace)
         {
-            throw new InvalidDataException(
-                "The file is not a supported KML 2.2 document.");
+            throw new InvalidDataException("The file is not a supported KML 2.2 document.");
+        }
+
+        int placemarks = 0, points = 0, paths = 0, polygons = 0, folders = 0;
+
+        // XmlReader advances through the document without constructing an XDocument.
+        while (reader.Read())
+        {
+            if (reader.NodeType != XmlNodeType.Element ||
+                reader.NamespaceURI != KmlNamespace)
+                continue;
+
+            switch (reader.LocalName)
+            {
+                case "Placemark": placemarks++; break;
+                case "Point": points++; break;
+                case "LineString": paths++; break;
+                case "Polygon": polygons++; break;
+                case "Folder": folders++; break;
+            }
         }
 
         return new KmlAnalysisResult
         {
-            PlacemarkCount = document
-                .Descendants(kml + "Placemark").Count(),
-
-            PointCount = document
-                .Descendants(kml + "Point").Count(),
-
-            LineStringCount = document
-                .Descendants(kml + "LineString").Count(),
-
-            PolygonCount = document
-                .Descendants(kml + "Polygon").Count(),
-
-            FolderCount = document
-                .Descendants(kml + "Folder").Count()
+            PlacemarkCount = placemarks,
+            PointCount = points,
+            LineStringCount = paths,
+            PolygonCount = polygons,
+            FolderCount = folders
         };
     }
 }
