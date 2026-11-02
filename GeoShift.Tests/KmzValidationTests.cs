@@ -21,14 +21,14 @@ public class KmzValidationTests
     public void Analyze_OversizedDecompressedKml_RejectsArchive()
     {
         // Highly compressible input keeps the KMZ small while exceeding
-        // the 20 MiB limit on the uncompressed KML entry.
-        var oversizedKml = new string('x', 20 * 1024 * 1024 + 1);
+        // the 200 MiB limit on the uncompressed KML entry.
+        var oversizedKml = new string('x', 200 * 1024 * 1024 + 1);
         using var archiveStream = CreateArchive(("doc.kml", oversizedKml));
 
         var error = Assert.Throws<InvalidDataException>(
             () => new KmzAnalyzer().Analyze(archiveStream));
 
-        Assert.Contains("20 MB limit", error.Message);
+        Assert.Contains("200 MB limit", error.Message);
     }
 
     [Fact]
