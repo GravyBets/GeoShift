@@ -20,7 +20,15 @@ public sealed class KmlAnalyzer
             MaxCharactersInDocument = 0 // Byte limits are enforced at the KMZ extraction boundary.
         };
 
-        using var reader = XmlReader.Create(stream, settings);
+        // The XML parser context supplies the standard xsi prefix for exports
+        // that reference xsi:schemaLocation without declaring xmlns:xsi.
+        // All other namespace and XML validation remains enabled.
+        var nameTable = new NameTable();
+        var namespaces = new XmlNamespaceManager(nameTable);
+        namespaces.AddNamespace("xsi", "http://www.w3.org/2001/XMLSchema-instance");
+        var context = new XmlParserContext(nameTable, namespaces, null, XmlSpace.None);
+
+        using var reader = XmlReader.Create(stream, settings, context);
         reader.MoveToContent();
 
         if (reader.NodeType != XmlNodeType.Element ||
