@@ -137,8 +137,11 @@ public sealed class StreamingKmlCsvConverter
             else if (reader.LocalName == "name" &&
                      folders.Count > 0 && reader.Depth == folders.Peek().Depth + 1)
             {
+                using var nameSubtree = reader.ReadSubtree();
+                nameSubtree.MoveToContent();
+                var folderName = XElement.Load(nameSubtree).Value.Trim();
                 var folder = folders.Pop();
-                folders.Push((folder.Depth, reader.ReadElementContentAsString().Trim()));
+                folders.Push((folder.Depth, folderName));
             }
             else if (reader.LocalName == "Placemark")
             {
