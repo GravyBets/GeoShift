@@ -39,6 +39,25 @@
                     </select>
                 </div>
             }
+            <details class="border rounded p-3 mb-3">
+                <summary><strong>Match other column names (optional)</strong></summary>
+                <p class="gs-note mt-2">Give equivalent fields the same output name. For example, rename RadioSerialNumber to RadioSN. Leave unrelated fields unchanged.</p>
+                @foreach (var dataset in _datasets)
+                {
+                    <h4 class="mt-3">@dataset.Name</h4>
+                    @foreach (var column in dataset.Columns.Where(column => column != dataset.KeyColumn))
+                    {
+                        <div class="row align-items-center mb-2">
+                            <label class="col-sm-5 col-form-label">@column</label>
+                            <div class="col-sm-7">
+                                <input class="form-control" aria-label="@($"Output name for {column} in {dataset.Name}")"
+                                       value="@dataset.OutputNames[column]"
+                                       @onchange="e => SetOutputName(dataset, column, e.Value?.ToString())" />
+                            </div>
+                        </div>
+                    }
+                }
+            </details>
             <button class="btn btn-primary" @onclick="RunPreview" disabled="@_busy">Preview migration →</button>
         </section>
     }
@@ -189,6 +208,7 @@
         public required IReadOnlyList<IReadOnlyDictionary<string, string?>> Rows { get; init; }
         public required IReadOnlyList<string> Columns { get; init; }
         public required string KeyColumn { get; set; }
+        public Dictionary<string, string> OutputNames { get; } = new(StringComparer.OrdinalIgnoreCase);
     }
 
     private readonly List<UploadedDataset> _datasets = [];
@@ -382,13 +402,15 @@
                 var columns = rows.Count > 0 ? rows[0].Keys.ToArray() : Array.Empty<string>();
                 if (columns.Length == 0)
                     throw new InvalidDataException($"'{file.Name}' has no data rows.");
-                _datasets.Add(new UploadedDataset
+                var uploaded = new UploadedDataset
                 {
                     Name = file.Name,
                     Rows = rows,
                     Columns = columns,
                     KeyColumn = columns[0]
-                });
+                };
+                foreach (var column in columns) uploaded.OutputNames[column] = column;
+                _datasets.Add(uploaded);
             }
             if (_datasets.Select(x => x.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != _datasets.Count)
                 throw new InvalidDataException("Files must have distinct names.");
@@ -399,6 +421,16 @@
             _error = ex.Message;
         }
         finally { _busy = false; }
+    }
+
+    private void SetOutputName(UploadedDataset dataset, string column, string? name)
+    {
+        if (!dataset.Columns.Contains(column)) return;
+        dataset.OutputNames[column] = name?.Trim() ?? "";
+        _result = null;
+        _drafts.Clear();
+        _decisions.Clear();
+        _skipped.Clear();
     }
 
     private void SetKey(UploadedDataset dataset, string? column)
@@ -421,8 +453,19 @@
         _showSummary = false;
         try
         {
+            foreach (var dataset in _datasets)
+            {
+                var targets = dataset.Columns.Select(column =>
+                    column == dataset.KeyColumn ? "GeoShift Match Key" : dataset.OutputNames[column]).ToArray();
+                if (targets.Any(string.IsNullOrWhiteSpace))
+                    throw new InvalidDataException($"Every output column in '{dataset.Name}' needs a name.");
+                if (targets.Distinct(StringComparer.OrdinalIgnoreCase).Count() != targets.Length)
+                    throw new InvalidDataException($"'{dataset.Name}' maps multiple columns to the same output name. Give each field a unique name.");
+            }
             var inputs = _datasets.Select(d => new MigrationWorkflowDataset(
-                d.Name, d.Rows, new[] { new ColumnMappingRule(d.KeyColumn, "GeoShift Match Key") })).ToArray();
+                d.Name, d.Rows,
+                d.Columns.Select(column => new ColumnMappingRule(column,
+                    column == d.KeyColumn ? "GeoShift Match Key" : d.OutputNames[column])).ToArray())).ToArray();
             _result = new MigrationWorkflowEngine().Execute(
                 new MigrationWorkflowRequest(inputs, ["GeoShift Match Key"], []));
             foreach (var group in _result.Duplicates.Groups)
