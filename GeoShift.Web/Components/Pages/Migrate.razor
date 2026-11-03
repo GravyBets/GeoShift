@@ -55,7 +55,7 @@
                 <div class="gs-stat"><div class="gs-stat-label">Conflicting groups</div><div class="gs-stat-value">@_result.Report.GroupsWithConflicts</div></div>
                 <div class="gs-stat"><div class="gs-stat-label">Missing keys</div><div class="gs-stat-value">@_result.Report.RowsMissingMatchKeys</div></div>
             </div>
-            <p class="gs-note">Preview only: no duplicates have been removed. The first 20 duplicate groups appear below.</p>
+            <p class="gs-note">No records are consolidated until you confirm them in the review below.</p>
             <div class="gs-preview-table">
                 <table class="table table-hover">
                     <thead><tr><th>Identifier</th><th>Records</th><th>Conflicting columns</th></tr></thead>
@@ -74,59 +74,100 @@
         </section>
 
         <section class="gs-panel">
-            <div class="gs-panel-heading"><h2>Resolve duplicates</h2><span class="gs-step">STEP 04</span></div>
-            <p class="gs-note">Review records and explicitly approve each consolidation. Unapproved groups retain every row.</p>
-            @foreach (var group in _result.Duplicates.Groups.Take(20))
+            <div class="gs-panel-heading"><h2>Review duplicate records</h2><span class="gs-step">STEP 04</span></div>
+            @if (_result.Duplicates.Groups.Count == 0)
             {
+                <p>No duplicate identifiers found. All records remain in the preview.</p>
+            }
+            else
+            {
+                var groups = _result.Duplicates.Groups;
+                var group = groups[_reviewIndex];
                 var id = group.RowIndices[0];
                 var draft = _drafts[id];
-                <div class="border rounded p-3 mb-3" @key="id">
-                    <strong>Identifier: @string.Join(", ", group.Key.Values)</strong>
-                    <p class="gs-note">@(group.HasConflicts ? "Conflicting values require review" : "No conflicting values") · @(_decisions.ContainsKey(id) ? "Approved" : "Pending")</p>
-                    <label class="form-label">Base record to retain</label>
-                    <select class="form-select mb-2" value="@draft.KeepRow" @onchange="e => ChangeKeep(id, e.Value?.ToString())">
-                        @foreach (var index in group.RowIndices)
-                        {
-                            var row = _result.Merged.Rows[index];
-                            <option value="@index">@row.SourceDataset — row @row.SourceRowNumber</option>
-                        }
-                    </select>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <div class="gs-page-kicker">REVIEW @(_reviewIndex + 1) OF @groups.Count</div>
+                        <h3 class="mb-1">Identifier: @string.Join(", ", group.Key.Values)</h3>
+                        <span class="gs-note">@group.RowIndices.Count records found · @group.ConflictingColumns.Count conflicting fields</span>
+                    </div>
+                    <strong>@(_decisions.ContainsKey(id) ? "✓ Confirmed" : _skipped.Contains(id) ? "Skipped" : "Needs review")</strong>
+                </div>
+                <div class="progress mb-3" role="progressbar" aria-label="Review progress" aria-valuenow="@(_reviewIndex + 1)" aria-valuemin="0" aria-valuemax="@groups.Count">
+                    <div class="progress-bar" style="@($"width:{100.0 * (_reviewIndex + 1) / groups.Count:F1}%")"></div>
+                </div>
+                <p>Choose which record to start with, then select the correct value for any conflicting field. Your original files will not be changed.</p>
+                <div class="mb-3">
+                    <strong>1. Which record should we start with?</strong>
+                    @foreach (var index in group.RowIndices)
+                    {
+                        var row = _result.Merged.Rows[index];
+                        <label class="d-block border rounded p-3 mt-2">
+                            <input type="radio" name="@($"base-{id}")" checked="@(draft.KeepRow == index)" @onchange="() => ChangeKeep(id, index.ToString())" />
+                            <strong class="ms-2">@row.SourceDataset</strong> <span class="gs-note">row @row.SourceRowNumber</span>
+                        </label>
+                    }
+                </div>
+                <div class="mb-3">
+                    <strong>2. Choose the correct values</strong>
+                    @if (!group.HasConflicts)
+                    {
+                        <p class="gs-note mt-2">These records have no conflicting field values. Review the final record below before confirming.</p>
+                    }
+                    @foreach (var column in group.ConflictingColumns)
+                    {
+                        <div class="border rounded p-3 mt-2">
+                            <strong>@column</strong>
+                            @foreach (var index in group.RowIndices)
+                            {
+                                var row = _result.Merged.Rows[index];
+                                var cell = row.Columns.TryGetValue(column, out var value) ? value : null;
+                                <label class="d-block border rounded p-2 mt-2">
+                                    <input type="radio" name="@($"field-{id}-{column}")" checked="@(GetSource(id, column) == index)" @onchange="() => ChangeSource(id, column, index.ToString())" />
+                                    <strong class="ms-2">@(string.IsNullOrEmpty(cell) ? "(empty)" : cell)</strong>
+                                    <span class="gs-note ms-2">from @row.SourceDataset · row @row.SourceRowNumber</span>
+                                </label>
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="border rounded p-3 mb-3">
+                    <h4>3. Preview your final record</h4>
+                    <p class="gs-note">This is what will remain if you confirm. Other records in this group will be consolidated in the preview.</p>
                     <div class="gs-preview-table">
                         <table class="table table-hover">
-                            <thead><tr><th>Field</th>@foreach (var index in group.RowIndices) { <th>@_result.Merged.Rows[index].SourceDataset</th> }</tr></thead>
                             <tbody>
                                 @foreach (var column in _result.Merged.Columns)
                                 {
-                                    <tr><th>@column @(group.ConflictingColumns.Contains(column) ? "⚠" : "")</th>
-                                    @foreach (var index in group.RowIndices)
-                                    {
-                                        <td>@(_result.Merged.Rows[index].Columns.TryGetValue(column, out var cell) ? cell : "")</td>
-                                    }
+                                    var selectedRow = _result.Merged.Rows[GetSource(id, column)];
+                                    <tr>
+                                        <th scope="row">@column</th>
+                                        <td>@(selectedRow.Columns.TryGetValue(column, out var value) ? value : "")</td>
                                     </tr>
                                 }
                             </tbody>
                         </table>
                     </div>
-                    @foreach (var column in group.ConflictingColumns)
-                    {
-                        <label class="form-label">Choose @column value</label>
-                        <select class="form-select mb-2" value="@GetSource(id, column)" @onchange="e => ChangeSource(id, column, e.Value?.ToString())">
-                            @foreach (var index in group.RowIndices)
-                            {
-                                var row = _result.Merged.Rows[index];
-                                <option value="@index">@row.SourceDataset: @(row.Columns.TryGetValue(column, out var cell) ? cell : "(empty)")</option>
-                            }
-                        </select>
-                    }
-                    <button class="btn btn-primary mt-2" @onclick="() => Approve(id)">Approve consolidation</button>
+                </div>
+                @if (_decisions.ContainsKey(id))
+                {
+                    <div class="alert alert-success">This group is confirmed. You can change a selection to review it again, or undo your decision.</div>
+                }
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    <button class="btn btn-primary" @onclick="() => Approve(id)">Confirm this record</button>
+                    <button class="btn btn-outline-secondary" @onclick="() => Skip(id)">Keep both for now</button>
                     @if (_decisions.ContainsKey(id))
                     {
-                        <button class="btn btn-outline-secondary mt-2 ms-2" @onclick="() => Undo(id)">Undo</button>
+                        <button class="btn btn-outline-secondary" @onclick="() => Undo(id)">Undo confirmation</button>
                     }
                 </div>
+                <div class="d-flex justify-content-between gap-2">
+                    <button class="btn btn-outline-secondary" disabled="@(_reviewIndex == 0)" @onclick="PreviousGroup">← Previous</button>
+                    <button class="btn btn-outline-primary" disabled="@(_reviewIndex == groups.Count - 1)" @onclick="NextGroup">Next →</button>
+                </div>
+                <p class="gs-note mt-3">@_decisions.Count confirmed · @_skipped.Count kept separate · @(groups.Count - _decisions.Count - _skipped.Count) awaiting review · @_result.Report.OutputRows output records</p>
+                <button class="btn btn-outline-secondary" disabled="@(_decisions.Count == 0 && _skipped.Count == 0)" @onclick="ResetDecisions">Reset all review decisions</button>
             }
-            <p class="gs-note">@_decisions.Count approved group(s); @_result.Report.OutputRows rows in preview output. Only the first 20 groups are available for review.</p>
-            <button class="btn btn-outline-secondary" @onclick="ResetDecisions" disabled="@(_decisions.Count == 0)">Reset all approvals</button>
         </section>
     }
 </div>
@@ -144,6 +185,8 @@
     private MigrationWorkflowResult? _result;
     private string? _error;
     private bool _busy;
+    private int _reviewIndex;
+    private readonly HashSet<int> _skipped = [];
 
     private sealed class DraftDecision
     {
@@ -161,6 +204,7 @@
         if (!int.TryParse(raw, out var index)) return;
         _drafts[id].KeepRow = index;
         _decisions.Remove(id);
+        RefreshResolution();
     }
 
     private void ChangeSource(int id, string column, string? raw)
@@ -168,6 +212,7 @@
         if (!int.TryParse(raw, out var index)) return;
         _drafts[id].Sources[column] = index;
         _decisions.Remove(id);
+        RefreshResolution();
     }
 
     private void Approve(int id)
@@ -175,11 +220,31 @@
         var draft = _drafts[id];
         _decisions[id] = new ConflictResolutionDecision(draft.KeepRow,
             new Dictionary<string, int>(draft.Sources, StringComparer.OrdinalIgnoreCase));
+        _skipped.Remove(id);
         RefreshResolution();
+        NextGroup();
     }
 
     private void Undo(int id) { _decisions.Remove(id); RefreshResolution(); }
-    private void ResetDecisions() { _decisions.Clear(); RefreshResolution(); }
+    private void Skip(int id)
+    {
+        _decisions.Remove(id);
+        _skipped.Add(id);
+        RefreshResolution();
+        NextGroup();
+    }
+    private void PreviousGroup() { if (_reviewIndex > 0) _reviewIndex--; }
+    private void NextGroup()
+    {
+        if (_result is not null && _reviewIndex + 1 < _result.Duplicates.Groups.Count) _reviewIndex++;
+    }
+    private void ResetDecisions()
+    {
+        _decisions.Clear();
+        _skipped.Clear();
+        _reviewIndex = 0;
+        RefreshResolution();
+    }
 
     private void RefreshResolution()
     {
@@ -207,6 +272,8 @@
         _datasets.Clear();
         _drafts.Clear();
         _decisions.Clear();
+        _skipped.Clear();
+        _reviewIndex = 0;
         try
         {
             var files = args.GetMultipleFiles(3);
@@ -262,7 +329,7 @@
                 d.Name, d.Rows, new[] { new ColumnMappingRule(d.KeyColumn, "GeoShift Match Key") })).ToArray();
             _result = new MigrationWorkflowEngine().Execute(
                 new MigrationWorkflowRequest(inputs, ["GeoShift Match Key"], []));
-            foreach (var group in _result.Duplicates.Groups.Take(20))
+            foreach (var group in _result.Duplicates.Groups)
                 _drafts.Add(group.RowIndices[0], new DraftDecision { KeepRow = group.RowIndices[0] });
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException)
