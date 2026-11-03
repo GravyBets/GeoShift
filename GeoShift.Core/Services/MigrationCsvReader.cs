@@ -25,6 +25,8 @@ public static class MigrationCsvReader
                     fields.Add(field.ToString());
                     records.Add(fields.ToArray());
                 }
+                if (records.Count > maxRows + 1)
+                    throw new InvalidDataException($"CSV preview is limited to {maxRows} data rows.");
                 break;
             }
             var ch = (char)next;
