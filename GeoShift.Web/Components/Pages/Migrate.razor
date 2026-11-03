@@ -55,7 +55,9 @@
             <div class="gs-stats">
                 <div class="gs-stat"><div class="gs-stat-label">Imported</div><div class="gs-stat-value">@_result.Report.ImportedRows</div></div>
                 <div class="gs-stat"><div class="gs-stat-label">Duplicate groups</div><div class="gs-stat-value">@_result.Report.DuplicateGroups</div></div>
-                <div class="gs-stat"><div class="gs-stat-label">Conflicting groups</div><div class="gs-stat-value">@_result.Report.GroupsWithConflicts</div></div>
+                <div class="gs-stat"><div class="gs-stat-label">Identical</div><div class="gs-stat-value">@CountKind(DuplicateGroupKind.Identical)</div></div>
+                <div class="gs-stat"><div class="gs-stat-label">Missing information</div><div class="gs-stat-value">@CountKind(DuplicateGroupKind.Complementary)</div></div>
+                <div class="gs-stat"><div class="gs-stat-label">Disagreements</div><div class="gs-stat-value">@CountKind(DuplicateGroupKind.Conflicting)</div></div>
                 <div class="gs-stat"><div class="gs-stat-label">Missing keys</div><div class="gs-stat-value">@_result.Report.RowsMissingMatchKeys</div></div>
             </div>
             <p class="gs-note">No records are consolidated without your approval.</p>
@@ -78,13 +80,14 @@
             }
             <div class="gs-preview-table">
                 <table class="table table-hover">
-                    <thead><tr><th>Identifier</th><th>Records</th><th>Conflicting columns</th></tr></thead>
+                    <thead><tr><th>Identifier</th><th>Records</th><th>Review type</th><th>Fields to review</th></tr></thead>
                     <tbody>
                         @foreach (var group in _result.Duplicates.Groups.Take(20))
                         {
                             <tr>
                                 <td>@string.Join(", ", group.Key.Values)</td>
                                 <td>@group.RowIndices.Count</td>
+                                <td>@DescribeKind(group)</td>
                                 <td>@(group.HasConflicts ? string.Join(", ", group.ConflictingColumns) : "None")</td>
                             </tr>
                         }
@@ -211,6 +214,21 @@
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(csv));
         using var reference = new DotNetStreamReference(stream);
         await JS.InvokeVoidAsync("geoShiftDownloadFile", name, reference);
+    }
+
+    private int CountKind(DuplicateGroupKind kind) => _result is null ? 0 :
+        _result.Duplicates.Groups.Count(group => DuplicateGroupClassifier.Classify(_result.Merged, group).Kind == kind);
+
+    private string DescribeKind(DuplicateGroup group)
+    {
+        if (_result is null) return "";
+        var classification = DuplicateGroupClassifier.Classify(_result.Merged, group);
+        return classification.Kind switch
+        {
+            DuplicateGroupKind.Identical => "Identical",
+            DuplicateGroupKind.Complementary => "Missing information",
+            _ => "Conflicting values"
+        };
     }
 
     private bool _confirmExact;
