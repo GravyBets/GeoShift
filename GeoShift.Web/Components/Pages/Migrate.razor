@@ -58,7 +58,24 @@
                 <div class="gs-stat"><div class="gs-stat-label">Conflicting groups</div><div class="gs-stat-value">@_result.Report.GroupsWithConflicts</div></div>
                 <div class="gs-stat"><div class="gs-stat-label">Missing keys</div><div class="gs-stat-value">@_result.Report.RowsMissingMatchKeys</div></div>
             </div>
-            <p class="gs-note">No records are consolidated until you confirm them in the review below.</p>
+            <p class="gs-note">No records are consolidated without your approval.</p>
+            @if (ExactPendingCount > 0)
+            {
+                <div class="border rounded p-3 mb-3">
+                    <strong>@ExactPendingCount identical duplicate groups</strong>
+                    <p class="gs-note">All fields match. Approve these together instead of reviewing each one.</p>
+                    @if (!_confirmExact)
+                    {
+                        <button class="btn btn-outline-primary" @onclick="() => _confirmExact = true">Review exact matches</button>
+                    }
+                    else
+                    {
+                        <p>Combine @ExactPendingCount groups into one record each? Original uploads remain unchanged.</p>
+                        <button class="btn btn-primary me-2" @onclick="ApproveExactMatches">Confirm exact matches</button>
+                        <button class="btn btn-outline-secondary" @onclick="() => _confirmExact = false">Cancel</button>
+                    }
+                </div>
+            }
             <div class="gs-preview-table">
                 <table class="table table-hover">
                     <thead><tr><th>Identifier</th><th>Records</th><th>Conflicting columns</th></tr></thead>
@@ -154,7 +171,7 @@
         {
             <section class="gs-panel">
                 <div class="gs-panel-heading"><h2>Download your results</h2><span class="gs-step">STEP 05</span></div>
-                <p>Your original files remain unchanged. The cleaned CSV contains @_result.Report.OutputRows records. The audit explains which duplicates were combined, kept separate, or left unreviewed.</p>
+                <p><strong>@_result.Report.ImportedRows imported → @_result.Report.OutputRows final records.</strong> @_decisions.Count groups combined; @_skipped.Count kept separate. Verify these totals before downloading. Original uploads remain unchanged.</p>
                 <button class="btn btn-primary me-2 mb-2" @onclick="DownloadCleaned">Download cleaned CSV</button>
                 <button class="btn btn-outline-primary mb-2" @onclick="DownloadAudit">Download audit report</button>
             </section>
@@ -196,6 +213,21 @@
         await JS.InvokeVoidAsync("geoShiftDownloadFile", name, reference);
     }
 
+    private bool _confirmExact;
+    private int ExactPendingCount => _result is null ? 0 : _result.Duplicates.Groups.Count(g => !g.HasConflicts && !_decisions.ContainsKey(g.RowIndices[0]) && !_skipped.Contains(g.RowIndices[0]));
+    private void ApproveExactMatches()
+    {
+        if (_result is null) return;
+        foreach (var group in _result.Duplicates.Groups.Where(g => !g.HasConflicts))
+        {
+            var id = group.RowIndices[0];
+            if (_skipped.Contains(id) || _decisions.ContainsKey(id)) continue;
+            _decisions[id] = new ConflictResolutionDecision(id, new Dictionary<string, int>());
+        }
+        _confirmExact = false;
+        RefreshResolution();
+        while (_reviewIndex < _result.Duplicates.Groups.Count && _decisions.ContainsKey(_result.Duplicates.Groups[_reviewIndex].RowIndices[0])) _reviewIndex++;
+    }
     private int _reviewIndex;
     private int _questionIndex;
     private bool _showSummary;
