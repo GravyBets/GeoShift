@@ -41,7 +41,30 @@
             }
             <details class="border rounded p-3 mb-3">
                 <summary><strong>Match other column names (optional)</strong></summary>
-                <p class="gs-note mt-2">Give equivalent fields the same output name. For example, rename RadioSerialNumber to RadioSN. Leave unrelated fields unchanged.</p>
+                <p class="gs-note mt-2">Give equivalent fields the same output name. GeoShift can suggest likely matches, but nothing changes without your approval.</p>
+                @if (PendingNameSuggestions.Count > 0)
+                {
+                    <div class="border rounded p-3 mb-3">
+                        <strong>Suggested column matches</strong>
+                        @foreach (var suggestion in PendingNameSuggestions)
+                        {
+                            <div class="gs-note mt-2">
+                                @_datasets[suggestion.DatasetIndex].Name:
+                                <strong>@suggestion.SourceColumn</strong> → <strong>@suggestion.SuggestedOutputColumn</strong>
+                            </div>
+                        }
+                        @if (!_confirmMappings)
+                        {
+                            <button class="btn btn-outline-primary mt-3" @onclick="() => _confirmMappings = true">Review suggested changes</button>
+                        }
+                        else
+                        {
+                            <p class="gs-note mt-3">Apply these names to the output? You can still edit them before previewing.</p>
+                            <button class="btn btn-primary me-2" @onclick="ApplyNameSuggestions">Apply suggestions</button>
+                            <button class="btn btn-outline-secondary" @onclick="() => _confirmMappings = false">Cancel</button>
+                        }
+                    </div>
+                }
                 @foreach (var dataset in _datasets)
                 {
                     <h4 class="mt-3">@dataset.Name</h4>
@@ -209,6 +232,35 @@
         public required IReadOnlyList<string> Columns { get; init; }
         public required string KeyColumn { get; set; }
         public Dictionary<string, string> OutputNames { get; } = new(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private bool _confirmMappings;
+    private IReadOnlyList<ColumnNameSuggestion> PendingNameSuggestions
+    {
+        get
+        {
+            var candidates = ColumnNameSuggester.Suggest(_datasets.Select(dataset =>
+                new ColumnNameDataset(dataset.Columns, dataset.KeyColumn)).ToArray());
+            return candidates.Where(suggestion =>
+            {
+                var dataset = _datasets[suggestion.DatasetIndex];
+                // Respect manual edits and avoid overwriting an existing target column.
+                return string.Equals(dataset.OutputNames[suggestion.SourceColumn], suggestion.SourceColumn, StringComparison.Ordinal) &&
+                    !dataset.Columns.Where(column => column != suggestion.SourceColumn && column != dataset.KeyColumn)
+                        .Any(column => string.Equals(dataset.OutputNames[column], suggestion.SuggestedOutputColumn, StringComparison.OrdinalIgnoreCase));
+            }).ToArray();
+        }
+    }
+
+    private void ApplyNameSuggestions()
+    {
+        foreach (var suggestion in PendingNameSuggestions)
+            _datasets[suggestion.DatasetIndex].OutputNames[suggestion.SourceColumn] = suggestion.SuggestedOutputColumn;
+        _confirmMappings = false;
+        _result = null;
+        _decisions.Clear();
+        _skipped.Clear();
+        _drafts.Clear();
     }
 
     private readonly List<UploadedDataset> _datasets = [];
@@ -380,6 +432,7 @@
         _error = null;
         _result = null;
         _datasets.Clear();
+        _confirmMappings = false;
         _drafts.Clear();
         _decisions.Clear();
         _skipped.Clear();
@@ -434,6 +487,7 @@
     {
         if (!dataset.Columns.Contains(column)) return;
         dataset.OutputNames[column] = name?.Trim() ?? "";
+        _confirmMappings = false;
         _result = null;
         _drafts.Clear();
         _decisions.Clear();
@@ -443,6 +497,7 @@
     private void SetKey(UploadedDataset dataset, string? column)
     {
         if (column is not null && dataset.Columns.Contains(column)) dataset.KeyColumn = column;
+        _confirmMappings = false;
         _result = null;
         _drafts.Clear();
         _decisions.Clear();
