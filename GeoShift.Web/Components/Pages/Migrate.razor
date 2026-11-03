@@ -102,13 +102,11 @@
                 @if (!_showSummary && group.HasConflicts)
                 {
                     var column = group.ConflictingColumns[_questionIndex];
-                    {
-                        var values = group.RowIndices.Select(index =>
-                            _result.Merged.Rows[index].Columns.TryGetValue(column, out var cell) ? cell : null).ToArray();
-                        var hasMissing = values.Any(string.IsNullOrWhiteSpace);
-                        var hasPresent = values.Any(value => !string.IsNullOrWhiteSpace(value));
-                        var fillingGap = hasMissing && hasPresent;
-                    }
+                    var values = group.RowIndices.Select(index =>
+                        _result.Merged.Rows[index].Columns.TryGetValue(column, out var cell) ? cell : null).ToArray();
+                    var hasMissing = values.Any(string.IsNullOrWhiteSpace);
+                    var hasPresent = values.Any(value => !string.IsNullOrWhiteSpace(value));
+                    var fillingGap = hasMissing && hasPresent;
                     <h4>@(fillingGap ? $"We found missing {column} information" : $"Which {column} value is correct?")</h4>
                     <p class="gs-note">@(fillingGap
                         ? "One file has information that another is missing. Choose the value you want to keep. GeoShift won't fill it in without your confirmation."
