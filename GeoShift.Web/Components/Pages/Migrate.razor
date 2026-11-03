@@ -103,7 +103,10 @@
                 if (!file.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
                     throw new InvalidDataException("Only CSV files are supported.");
                 await using var stream = file.OpenReadStream(2 * 1024 * 1024);
-                using var reader = new StreamReader(stream);
+                using var buffer = new MemoryStream();
+                await stream.CopyToAsync(buffer);
+                buffer.Position = 0;
+                using var reader = new StreamReader(buffer);
                 var rows = MigrationCsvReader.Read(reader);
                 var columns = rows.Count > 0 ? rows[0].Keys.ToArray() : Array.Empty<string>();
                 if (columns.Length == 0)
