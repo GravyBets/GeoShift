@@ -30,6 +30,39 @@ public sealed class KmzAnalyzer
     }
 
 
+    /// <summary>
+    /// Streams a KMZ's KML content into a bounded temporary file so the
+    /// two-pass CSV converter can seek without holding the KML in memory.
+    /// </summary>
+    public KmlCsvConversionResult ConvertToCsvStreaming(Stream stream, TextWriter output)
+    {
+        ArgumentNullException.ThrowIfNull(output);
+
+        var temporaryPath = Path.GetTempFileName();
+        try
+        {
+            using var temporary = new FileStream(
+                temporaryPath, FileMode.Open, FileAccess.ReadWrite,
+                FileShare.None, 81920, FileOptions.SequentialScan);
+
+            using (var archive = OpenArchive(stream))
+            using (var kmlStream = OpenKmlEntry(archive))
+            {
+                var buffer = new byte[81920];
+                int read;
+                while ((read = kmlStream.Read(buffer, 0, buffer.Length)) > 0)
+                    temporary.Write(buffer, 0, read);
+            }
+
+            temporary.Position = 0;
+            return new StreamingKmlCsvConverter().Convert(temporary, output);
+        }
+        finally
+        {
+            File.Delete(temporaryPath);
+        }
+    }
+
     private static ZipArchive OpenArchive(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
