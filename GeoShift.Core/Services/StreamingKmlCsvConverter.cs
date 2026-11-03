@@ -104,7 +104,11 @@ public sealed class StreamingKmlCsvConverter
             MaxCharactersInDocument = 200L * 1024 * 1024,
             IgnoreWhitespace = true
         };
-        using var reader = XmlReader.Create(input, settings);
+        var nameTable = new NameTable();
+        var namespaces = new XmlNamespaceManager(nameTable);
+        namespaces.AddNamespace("xsi", "http://www.w3.org/2001/XMLSchema-instance");
+        var context = new XmlParserContext(nameTable, namespaces, null, XmlSpace.None);
+        using var reader = XmlReader.Create(input, settings, context);
         reader.MoveToContent();
         if (reader.NodeType != XmlNodeType.Element ||
             reader.LocalName != "kml" || reader.NamespaceURI != Kml.NamespaceName)
