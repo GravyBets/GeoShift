@@ -61,13 +61,13 @@ public sealed class ConflictResolutionEngine
                 var original = dataset.Rows[index];
                 output.Add(new ResolvedDatasetRow(index, original.SourceDataset,
                     original.SourceRowNumber,
-                    new Dictionary<string, string?>(original.Columns, StringComparer.OrdinalIgnoreCase)));
+                    original.Columns.ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase)));
                 continue;
             }
 
             foreach (var member in group.RowIndices) handled.Add(member);
             var kept = dataset.Rows[decision.KeepRowIndex];
-            var values = new Dictionary<string, string?>(kept.Columns, StringComparer.OrdinalIgnoreCase);
+            var values = kept.Columns.ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
             var selectedSources = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             foreach (var (column, sourceIndex) in decision.ColumnSources)
             {
