@@ -37,7 +37,7 @@ public sealed class MigrationWorkflowEngineTests
         Assert.Equal(3, result.Resolved.Rows.Count);
         Assert.Equal(1, result.Report.DuplicateGroups);
         Assert.Equal(1, result.Report.UnresolvedGroups);
-        Assert.Equal(3, result.MappingAudit.Count);
+        Assert.Equal(5, result.MappingAudit.Count);
         Assert.Equal("location.csv", result.Merged.Rows[2].SourceDataset);
     }
 
