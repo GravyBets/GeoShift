@@ -4,6 +4,7 @@
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.JSInterop
 @using System.Text
+@using System.Text.Json
 @inject IJSRuntime JS
 
 <PageTitle>Migration Workspace — GeoShift</PageTitle>
@@ -39,6 +40,32 @@
                     </select>
                 </div>
             }
+            <div class="border rounded p-3 mb-3">
+                <h4>Saved mapping templates</h4>
+                <p class="gs-note">Reuse mappings for the same file layouts. Templates are stored in this browser, not on the server.</p>
+                <button class="btn btn-outline-secondary mb-2" @onclick="LoadTemplates">Load saved templates</button>
+                @if (_templates.Count > 0)
+                {
+                    <select class="form-select mb-2" @bind="_selectedTemplate">
+                        <option value="">Choose a template</option>
+                        @foreach (var template in _templates)
+                        {
+                            <option value="@template.Name">@template.Name</option>
+                        }
+                    </select>
+                    <button class="btn btn-outline-primary me-2" disabled="@string.IsNullOrWhiteSpace(_selectedTemplate)" @onclick="ApplyTemplate">Apply template</button>
+                    <button class="btn btn-outline-danger" disabled="@string.IsNullOrWhiteSpace(_selectedTemplate)" @onclick="DeleteTemplate">Delete template</button>
+                }
+                <div class="mt-3">
+                    <label class="form-label">Save current mappings as</label>
+                    <input class="form-control mb-2" @bind="_newTemplateName" maxlength="80" placeholder="e.g. Weekly radio inventory" />
+                    <button class="btn btn-outline-primary" disabled="@string.IsNullOrWhiteSpace(_newTemplateName)" @onclick="SaveTemplate">Save mapping template</button>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(_templateMessage))
+                {
+                    <p class="gs-note mt-2">@_templateMessage</p>
+                }
+            </div>
             <details class="border rounded p-3 mb-3">
                 <summary><strong>Match other column names (optional)</strong></summary>
                 <p class="gs-note mt-2">Give equivalent fields the same output name. GeoShift can suggest likely matches, but nothing changes without your approval.</p>
@@ -225,6 +252,105 @@
 </div>
 
 @code {
+    private sealed record SavedFileMapping(string FileName, string KeyColumn, Dictionary<string, string> OutputNames);
+    private sealed record SavedMappingTemplate(string Name, List<SavedFileMapping> Files);
+
+    private List<SavedMappingTemplate> _templates = [];
+    private string _selectedTemplate = "";
+    private string _newTemplateName = "";
+    private string? _templateMessage;
+
+    private async Task LoadTemplates()
+    {
+        try
+        {
+            var json = await JS.InvokeAsync<string>("geoShiftMappingTemplates.load");
+            _templates = JsonSerializer.Deserialize<List<SavedMappingTemplate>>(json) ?? [];
+            _templateMessage = $"Loaded {_templates.Count} templates from this browser.";
+        }
+        catch (Exception)
+        {
+            _templateMessage = "Could not read saved templates from this browser.";
+        }
+    }
+
+    private async Task SaveTemplate()
+    {
+        var name = _newTemplateName.Trim();
+        if (name.Length == 0 || name.Length > 80 || _datasets.Count == 0) return;
+        await LoadTemplates();
+        if (_templates.Any(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase)))
+        {
+            _templateMessage = "A template with this name already exists. Choose another name.";
+            return;
+        }
+        var files = _datasets.Select(d => new SavedFileMapping(d.Name, d.KeyColumn,
+            new Dictionary<string, string>(d.OutputNames, StringComparer.OrdinalIgnoreCase))).ToList();
+        _templates.Add(new SavedMappingTemplate(name, files));
+        try
+        {
+            await JS.InvokeVoidAsync("geoShiftMappingTemplates.save", JsonSerializer.Serialize(_templates));
+            _selectedTemplate = name;
+            _newTemplateName = "";
+            _templateMessage = "Mapping template saved in this browser.";
+        }
+        catch (Exception)
+        {
+            _templates.RemoveAll(t => t.Name == name);
+            _templateMessage = "Could not save the template. Browser storage may be disabled.";
+        }
+    }
+
+    private void ApplyTemplate()
+    {
+        var template = _templates.FirstOrDefault(t => t.Name == _selectedTemplate);
+        if (template is null) return;
+        // Validate all files and columns before modifying anything.
+        if (template.Files.Count != _datasets.Count ||
+            template.Files.Any(saved =>
+                !_datasets.Any(current => string.Equals(current.Name, saved.FileName, StringComparison.OrdinalIgnoreCase) &&
+                    current.Columns.Contains(saved.KeyColumn) &&
+                    current.Columns.Count == saved.OutputNames.Count &&
+                    current.Columns.All(column => saved.OutputNames.ContainsKey(column)))))
+        {
+            _templateMessage = "Template does not match these filenames and columns. Nothing was changed.";
+            return;
+        }
+        foreach (var dataset in _datasets)
+        {
+            var saved = template.Files.First(f => string.Equals(f.FileName, dataset.Name, StringComparison.OrdinalIgnoreCase));
+            dataset.KeyColumn = saved.KeyColumn;
+            foreach (var column in dataset.Columns) dataset.OutputNames[column] = saved.OutputNames[column];
+        }
+        _result = null;
+        _drafts.Clear();
+        _decisions.Clear();
+        _skipped.Clear();
+        _reviewIndex = 0;
+        _questionIndex = 0;
+        _showSummary = false;
+        _confirmMappings = false;
+        _templateMessage = "Template applied. Review the mappings before previewing.";
+    }
+
+    private async Task DeleteTemplate()
+    {
+        var template = _templates.FirstOrDefault(t => t.Name == _selectedTemplate);
+        if (template is null) return;
+        var remaining = _templates.Where(t => t.Name != template.Name).ToList();
+        try
+        {
+            await JS.InvokeVoidAsync("geoShiftMappingTemplates.save", JsonSerializer.Serialize(remaining));
+            _templates = remaining;
+            _selectedTemplate = "";
+            _templateMessage = "Template deleted from this browser.";
+        }
+        catch (Exception)
+        {
+            _templateMessage = "Could not delete the template.";
+        }
+    }
+
     private sealed class UploadedDataset
     {
         public required string Name { get; init; }
