@@ -102,7 +102,7 @@
                 @if (!_showSummary && group.HasConflicts)
                 {
                     var column = group.ConflictingColumns[_questionIndex];
-                    @{
+                    {
                         var values = group.RowIndices.Select(index =>
                             _result.Merged.Rows[index].Columns.TryGetValue(column, out var cell) ? cell : null).ToArray();
                         var hasMissing = values.Any(string.IsNullOrWhiteSpace);
@@ -120,7 +120,7 @@
                         <label class="d-block border rounded p-3 mb-2" style="cursor:pointer">
                             <input type="radio" name="@($"answer-{id}-{_questionIndex}")" checked="@(draft.Sources.TryGetValue(column, out var selected) && selected == index)" @onchange="() => ChooseAnswer(id, column, index)" />
                             <strong class="ms-2">@(string.IsNullOrWhiteSpace(value) ? "(No value)" : value)</strong>
-                            <div class="gs-note ms-4">@row.SourceDataset · row @row.SourceRowNumber</div>
+                            <span class="gs-note ms-4 d-block">@row.SourceDataset · row @row.SourceRowNumber</span>
                         </label>
                     }
                     <button class="btn btn-primary mt-3" disabled="@(!draft.Sources.ContainsKey(column))" @onclick="NextQuestion">Continue →</button>
