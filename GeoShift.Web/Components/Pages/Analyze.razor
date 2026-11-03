@@ -131,6 +131,8 @@
     private string? _error;
     private bool _isAnalyzing;
     private int _fileInputKey;
+    private string? _preparedCsvPath;
+    private string? _preparedFileName;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -148,6 +150,7 @@
         _previewRows = null;
         _error = null;
         _fileInputKey++;
+        DeletePreparedCsv();
     }
 
     private void OnFileSelected(InputFileChangeEventArgs e)
@@ -157,6 +160,7 @@
         _conversionResult = null;
         _previewRows = null;
         _error = null;
+        DeletePreparedCsv();
     }
 
     private async Task AnalyzeFile()
@@ -169,6 +173,7 @@
         _result = null;
         _conversionResult = null;
         _previewRows = null;
+        DeletePreparedCsv();
 
         try
         {
@@ -213,105 +218,90 @@
 
     private async Task PreviewCsv()
     {
-        if (_selectedFile is null)
-            return;
-
+        if (_selectedFile is null) return;
         _error = null;
-        _conversionResult = null;
-        _previewRows = null;
         _isAnalyzing = true;
-
         try
         {
-            var extension = Path.GetExtension(_selectedFile.Name)
-                .ToLowerInvariant();
-
-            await using var source = _selectedFile.OpenReadStream(MaxFileSize);
-            using var memory = new MemoryStream();
-            await source.CopyToAsync(memory);
-            memory.Position = 0;
-
-            var conversion = extension switch
-            {
-                ".kmz" => new KmzAnalyzer().ConvertToCsvWithSummary(memory),
-                ".kml" => new KmlCsvConverter().ConvertWithSummary(memory),
-                _ => throw new InvalidDataException("Unsupported file type.")
-            };
-
-            _previewRows = CsvPreviewReader.Read(conversion.CsvContent);
-            _conversionResult = conversion;
+            await EnsurePreparedCsv();
+            using var reader = new StreamReader(_preparedCsvPath!);
+            _previewRows = GeoShiftCsvPreview.ReadFirstRows(reader, 10);
         }
-        catch (Exception ex) when (
-            ex is IOException or System.Xml.XmlException or InvalidDataException)
+        catch (Exception ex) when (ex is IOException or System.Xml.XmlException
+            or InvalidDataException or InvalidOperationException)
         {
             _error = "Unable to preview this file. " + ex.Message;
         }
-        finally
-        {
-            _isAnalyzing = false;
-        }
+        finally { _isAnalyzing = false; }
     }
 
     private async Task DownloadCsv()
     {
-        if (_selectedFile is null)
-            return;
-
+        if (_selectedFile is null) return;
         _error = null;
-        _conversionResult = null;
         _isAnalyzing = true;
-
         try
         {
-            var extension = Path.GetExtension(
-                _selectedFile.Name).ToLowerInvariant();
-
-            await using var source =
-                _selectedFile.OpenReadStream(MaxFileSize);
-
-            using var memory = new MemoryStream();
-            await source.CopyToAsync(memory);
-            memory.Position = 0;
-
-            var conversion = extension switch
-            {
-                ".kmz" => new KmzAnalyzer()
-                    .ConvertToCsvWithSummary(memory),
-
-                ".kml" => new KmlCsvConverter()
-                    .ConvertWithSummary(memory),
-
-                _ => throw new InvalidDataException(
-                    "Unsupported file type.")
-            };
-
-            var bytes = Encoding.UTF8.GetBytes(
-                conversion.CsvContent);
-
-            using var csvStream = new MemoryStream(bytes);
-            using var streamReference =
-                new DotNetStreamReference(csvStream);
-
-            var fileName = Path.GetFileNameWithoutExtension(
-                _selectedFile.Name) + ".csv";
-
-            await JS.InvokeVoidAsync(
-                "geoShiftDownloadFile",
-                fileName,
-                streamReference);
-
-            _conversionResult = conversion;
+            await EnsurePreparedCsv();
+            await using var csv = File.OpenRead(_preparedCsvPath!);
+            using var reference = new DotNetStreamReference(csv);
+            await JS.InvokeVoidAsync("geoShiftDownloadFile", _preparedFileName, reference);
         }
-        catch (Exception ex) when (
-            ex is IOException
-            or System.Xml.XmlException
-            or InvalidDataException)
+        catch (Exception ex) when (ex is IOException or System.Xml.XmlException
+            or InvalidDataException or InvalidOperationException)
         {
-            _error = "Unable to convert this file. " + ex.Message;
+            _error = "Unable to download CSV. " + ex.Message;
+        }
+        finally { _isAnalyzing = false; }
+    }
+
+    private async Task EnsurePreparedCsv()
+    {
+        if (_preparedCsvPath is not null && File.Exists(_preparedCsvPath))
+            return;
+
+        if (_selectedFile is null)
+            throw new InvalidOperationException("Select a file first.");
+
+        var extension = Path.GetExtension(_selectedFile.Name).ToLowerInvariant();
+        if (extension is not (".kml" or ".kmz") || _selectedFile.Size > MaxFileSize)
+            throw new InvalidDataException("Select a KML or KMZ file up to 50 MB.");
+
+        var inputPath = Path.GetTempFileName();
+        var outputPath = Path.GetTempFileName();
+        try
+        {
+            await using (var source = _selectedFile.OpenReadStream(MaxFileSize))
+            await using (var destination = File.Create(inputPath))
+                await source.CopyToAsync(destination);
+
+            await using var input = File.OpenRead(inputPath);
+            using (var writer = new StreamWriter(outputPath, false, new UTF8Encoding(true)))
+            {
+                _conversionResult = extension == ".kmz"
+                    ? new KmzAnalyzer().ConvertToCsvStreaming(input, writer)
+                    : new StreamingKmlCsvConverter().Convert(input, writer);
+            }
+
+            _preparedCsvPath = outputPath;
+            _preparedFileName = Path.GetFileNameWithoutExtension(_selectedFile.Name) + ".csv";
         }
         finally
         {
-            _isAnalyzing = false;
+            File.Delete(inputPath);
+            if (_preparedCsvPath != outputPath)
+                File.Delete(outputPath);
         }
+    }
+
+    private void DeletePreparedCsv()
+    {
+        if (_preparedCsvPath is not null)
+        {
+            try { File.Delete(_preparedCsvPath); }
+            catch (IOException) { /* Temporary file can be cleaned up later. */ }
+        }
+        _preparedCsvPath = null;
+        _preparedFileName = null;
     }
 }
