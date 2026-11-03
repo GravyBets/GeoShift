@@ -102,8 +102,17 @@
                 @if (!_showSummary && group.HasConflicts)
                 {
                     var column = group.ConflictingColumns[_questionIndex];
-                    <h4>Which @column value is correct?</h4>
-                    <p class="gs-note">The files disagree. Pick the correct value, or keep both records if you're unsure.</p>
+                    @{
+                        var values = group.RowIndices.Select(index =>
+                            _result.Merged.Rows[index].Columns.TryGetValue(column, out var cell) ? cell : null).ToArray();
+                        var hasMissing = values.Any(string.IsNullOrWhiteSpace);
+                        var hasPresent = values.Any(value => !string.IsNullOrWhiteSpace(value));
+                        var fillingGap = hasMissing && hasPresent;
+                    }
+                    <h4>@(fillingGap ? $"We found missing {column} information" : $"Which {column} value is correct?")</h4>
+                    <p class="gs-note">@(fillingGap
+                        ? "One file has information that another is missing. Choose the value you want to keep. GeoShift won't fill it in without your confirmation."
+                        : "The files disagree. Pick the correct value, or keep both records if you're unsure.")</p>
                     @foreach (var index in group.RowIndices)
                     {
                         var row = _result.Merged.Rows[index];
@@ -119,7 +128,7 @@
                 else
                 {
                     <h4>@(group.HasConflicts ? "Does this look right?" : "These records match. Keep one copy?")</h4>
-                    <p class="gs-note">This is the record GeoShift will keep if you confirm. Your uploaded files remain unchanged.</p>
+                    <p class="gs-note">Review every value below before confirming. Empty values stay empty if you selected them. Your uploaded files remain unchanged.</p>
                     <div class="gs-preview-table mb-3">
                         <table class="table table-hover">
                             <tbody>
