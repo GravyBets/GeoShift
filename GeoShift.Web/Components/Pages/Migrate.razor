@@ -2,6 +2,9 @@
 @rendermode InteractiveServer
 @using GeoShift.Core.Services
 @using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.JSInterop
+@using System.Text
+@inject IJSRuntime JS
 
 <PageTitle>Migration Workspace — GeoShift</PageTitle>
 <div class="gs-container gs-workspace">
@@ -140,6 +143,15 @@
                 <p class="gs-note mt-4">@_decisions.Count confirmed · @_skipped.Count kept separate · @_result.Report.OutputRows output records</p>
             }
         </section>
+        @if (ReviewComplete || _result.Duplicates.Groups.Count == 0)
+        {
+            <section class="gs-panel">
+                <div class="gs-panel-heading"><h2>Download your results</h2><span class="gs-step">STEP 05</span></div>
+                <p>Your original files remain unchanged. The cleaned CSV contains @_result.Report.OutputRows records. The audit explains which duplicates were combined, kept separate, or left unreviewed.</p>
+                <button class="btn btn-primary me-2 mb-2" @onclick="DownloadCleaned">Download cleaned CSV</button>
+                <button class="btn btn-outline-primary mb-2" @onclick="DownloadAudit">Download audit report</button>
+            </section>
+        }
     }
 </div>
 
@@ -156,6 +168,27 @@
     private MigrationWorkflowResult? _result;
     private string? _error;
     private bool _busy;
+    private async Task DownloadCleaned()
+    {
+        if (_result is null) return;
+        await DownloadCsv("GeoShift_Cleaned_Data.csv",
+            MigrationCsvExporter.Cleaned(_result.Merged, _result.Resolved));
+    }
+
+    private async Task DownloadAudit()
+    {
+        if (_result is null) return;
+        await DownloadCsv("GeoShift_Migration_Audit.csv",
+            MigrationCsvExporter.Audit(_result.Merged, _result.Duplicates, _result.Resolved, _skipped));
+    }
+
+    private async Task DownloadCsv(string name, string csv)
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(csv));
+        using var reference = new DotNetStreamReference(stream);
+        await JS.InvokeVoidAsync("geoShiftDownloadFile", name, reference);
+    }
+
     private int _reviewIndex;
     private int _questionIndex;
     private bool _showSummary;
