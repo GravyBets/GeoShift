@@ -87,3 +87,8 @@ window.geoShiftSetupDropzone = (id) => {
         input.dispatchEvent(new Event("change", { bubbles: true }));
     });
 };
+
+window.geoShiftMappingTemplates = {
+    load: () => localStorage.getItem("geoshift.mappingTemplates.v1") || "[]",
+    save: (json) => localStorage.setItem("geoshift.mappingTemplates.v1", json)
+};
