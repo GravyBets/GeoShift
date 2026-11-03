@@ -10,12 +10,12 @@
 <div class="gs-container gs-workspace">
     <div class="gs-page-kicker">DATA MIGRATION WORKSPACE</div>
     <h1 class="gs-page-title">Merge and review your data.</h1>
-    <p class="gs-page-description">Upload up to three CSV files, map equivalent identifier columns, and preview duplicates. This workspace never automatically removes records.</p>
+    <p class="gs-page-description">Upload up to three CSV or Excel files, map equivalent identifier columns, and preview duplicates. This workspace never automatically removes records.</p>
 
     <section class="gs-panel">
-        <div class="gs-panel-heading"><h2>Import CSV files</h2><span class="gs-step">STEP 01</span></div>
-        <InputFile OnChange="LoadFiles" multiple accept=".csv,text/csv" disabled="@_busy" />
-        <p class="gs-note">Up to 3 CSV files, 2 MB per file, 5,000 data rows per file. Files are processed in memory for this preview.</p>
+        <div class="gs-panel-heading"><h2>Import CSV or Excel files</h2><span class="gs-step">STEP 01</span></div>
+        <InputFile OnChange="LoadFiles" multiple accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled="@_busy" />
+        <p class="gs-note">Up to 3 CSV or XLSX files, 2 MB per file, 5,000 data rows per file. Excel uses the first worksheet; formula cells are not supported. Files are processed in memory for this preview.</p>
         @foreach (var dataset in _datasets)
         {
             <div class="gs-file-info"><strong>@dataset.Name</strong><span> · @dataset.Rows.Count rows</span></div>
@@ -391,14 +391,21 @@
             var files = args.GetMultipleFiles(3);
             foreach (var file in files)
             {
-                if (!file.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidDataException("Only CSV files are supported.");
+                if (!file.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) &&
+                    !file.Name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Only CSV and XLSX files are supported.");
                 await using var stream = file.OpenReadStream(2 * 1024 * 1024);
                 using var buffer = new MemoryStream();
                 await stream.CopyToAsync(buffer);
                 buffer.Position = 0;
-                using var reader = new StreamReader(buffer);
-                var rows = MigrationCsvReader.Read(reader);
+                IReadOnlyList<IReadOnlyDictionary<string, string?>> rows;
+                if (file.Name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+                    rows = MigrationXlsxReader.Read(buffer);
+                else
+                {
+                    using var reader = new StreamReader(buffer);
+                    rows = MigrationCsvReader.Read(reader);
+                }
                 var columns = rows.Count > 0 ? rows[0].Keys.ToArray() : Array.Empty<string>();
                 if (columns.Length == 0)
                     throw new InvalidDataException($"'{file.Name}' has no data rows.");
