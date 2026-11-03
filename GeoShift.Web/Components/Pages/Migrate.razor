@@ -1,0 +1,152 @@
+@page "/migrate"
+@rendermode InteractiveServer
+@using GeoShift.Core.Services
+@using Microsoft.AspNetCore.Components.Forms
+
+<PageTitle>Migration Workspace — GeoShift</PageTitle>
+<div class="gs-container gs-workspace">
+    <div class="gs-page-kicker">DATA MIGRATION WORKSPACE</div>
+    <h1 class="gs-page-title">Merge and review your data.</h1>
+    <p class="gs-page-description">Upload up to three CSV files, map equivalent identifier columns, and preview duplicates. This workspace never automatically removes records.</p>
+
+    <section class="gs-panel">
+        <div class="gs-panel-heading"><h2>Import CSV files</h2><span class="gs-step">STEP 01</span></div>
+        <InputFile OnChange="LoadFiles" multiple accept=".csv,text/csv" disabled="@_busy" />
+        <p class="gs-note">Up to 3 CSV files, 2 MB per file, 5,000 data rows per file. Files are processed in memory for this preview.</p>
+        @foreach (var dataset in _datasets)
+        {
+            <div class="gs-file-info"><strong>@dataset.Name</strong><span> · @dataset.Rows.Count rows</span></div>
+        }
+    </section>
+
+    @if (_datasets.Count > 0)
+    {
+        <section class="gs-panel">
+            <div class="gs-panel-heading"><h2>Match identifier columns</h2><span class="gs-step">STEP 02</span></div>
+            <p class="gs-note">Choose the column representing the same identifier in each file. For example, Site # and Location ID.</p>
+            @foreach (var dataset in _datasets)
+            {
+                <div class="mb-3">
+                    <label class="form-label">@dataset.Name</label>
+                    <select class="form-select" value="@dataset.KeyColumn" @onchange="e => SetKey(dataset, e.Value?.ToString())">
+                        @foreach (var column in dataset.Columns)
+                        {
+                            <option value="@column">@column</option>
+                        }
+                    </select>
+                </div>
+            }
+            <button class="btn btn-primary" @onclick="RunPreview" disabled="@_busy">Preview migration →</button>
+        </section>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger" role="alert">@_error</div>
+    }
+
+    @if (_result is not null)
+    {
+        <section class="gs-panel">
+            <div class="gs-panel-heading"><h2>Migration report</h2><span class="gs-step">STEP 03</span></div>
+            <div class="gs-stats">
+                <div class="gs-stat"><div class="gs-stat-label">Imported</div><div class="gs-stat-value">@_result.Report.ImportedRows</div></div>
+                <div class="gs-stat"><div class="gs-stat-label">Duplicate groups</div><div class="gs-stat-value">@_result.Report.DuplicateGroups</div></div>
+                <div class="gs-stat"><div class="gs-stat-label">Conflicting groups</div><div class="gs-stat-value">@_result.Report.GroupsWithConflicts</div></div>
+                <div class="gs-stat"><div class="gs-stat-label">Missing keys</div><div class="gs-stat-value">@_result.Report.RowsMissingMatchKeys</div></div>
+            </div>
+            <p class="gs-note">Preview only: no duplicates have been removed. The first 20 duplicate groups appear below.</p>
+            <div class="gs-preview-table">
+                <table class="table table-hover">
+                    <thead><tr><th>Identifier</th><th>Records</th><th>Conflicting columns</th></tr></thead>
+                    <tbody>
+                        @foreach (var group in _result.Duplicates.Groups.Take(20))
+                        {
+                            <tr>
+                                <td>@string.Join(", ", group.Key.Values)</td>
+                                <td>@group.RowIndices.Count</td>
+                                <td>@(group.HasConflicts ? string.Join(", ", group.ConflictingColumns) : "None")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+</div>
+
+@code {
+    private sealed class UploadedDataset
+    {
+        public required string Name { get; init; }
+        public required IReadOnlyList<IReadOnlyDictionary<string, string?>> Rows { get; init; }
+        public required IReadOnlyList<string> Columns { get; init; }
+        public required string KeyColumn { get; set; }
+    }
+
+    private readonly List<UploadedDataset> _datasets = [];
+    private MigrationWorkflowResult? _result;
+    private string? _error;
+    private bool _busy;
+
+    private async Task LoadFiles(InputFileChangeEventArgs args)
+    {
+        _busy = true;
+        _error = null;
+        _result = null;
+        _datasets.Clear();
+        try
+        {
+            var files = args.GetMultipleFiles(3);
+            foreach (var file in files)
+            {
+                if (!file.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Only CSV files are supported.");
+                await using var stream = file.OpenReadStream(2 * 1024 * 1024);
+                using var reader = new StreamReader(stream);
+                var rows = MigrationCsvReader.Read(reader);
+                var columns = rows.Count > 0 ? rows[0].Keys.ToArray() : Array.Empty<string>();
+                if (columns.Length == 0)
+                    throw new InvalidDataException($"'{file.Name}' has no data rows.");
+                _datasets.Add(new UploadedDataset
+                {
+                    Name = file.Name,
+                    Rows = rows,
+                    Columns = columns,
+                    KeyColumn = columns[0]
+                });
+            }
+            if (_datasets.Select(x => x.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != _datasets.Count)
+                throw new InvalidDataException("Files must have distinct names.");
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException)
+        {
+            _datasets.Clear();
+            _error = ex.Message;
+        }
+        finally { _busy = false; }
+    }
+
+    private void SetKey(UploadedDataset dataset, string? column)
+    {
+        if (column is not null && dataset.Columns.Contains(column)) dataset.KeyColumn = column;
+        _result = null;
+    }
+
+    private void RunPreview()
+    {
+        _error = null;
+        _result = null;
+        try
+        {
+            var inputs = _datasets.Select(d => new MigrationWorkflowDataset(
+                d.Name, d.Rows, new[] { new ColumnMappingRule(d.KeyColumn, "GeoShift Match Key") })).ToArray();
+            _result = new MigrationWorkflowEngine().Execute(
+                new MigrationWorkflowRequest(inputs, ["GeoShift Match Key"], []));
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException)
+        {
+            _error = ex.Message;
+        }
+    }
+}
