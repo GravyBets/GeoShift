@@ -141,6 +141,8 @@ public sealed class StreamingKmlCsvConverter
                 using var subtree = reader.ReadSubtree();
                 subtree.MoveToContent();
                 var placemark = XElement.Load(subtree);
+                foreach (var _ in placemark.Descendants(Kml + "LineString")) onPath?.Invoke();
+                foreach (var _ in placemark.Descendants(Kml + "Polygon")) onPolygon?.Invoke();
                 var folderPath = string.Join("/",
                     folders.Reverse().Select(f => f.Name)
                         .Where(n => !string.IsNullOrWhiteSpace(n)));
