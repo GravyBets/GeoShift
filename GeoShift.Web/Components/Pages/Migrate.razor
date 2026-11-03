@@ -74,91 +74,70 @@
         </section>
 
         <section class="gs-panel">
-            <div class="gs-panel-heading"><h2>Fix duplicate information</h2><span class="gs-step">STEP 04</span></div>
+            <div class="gs-panel-heading"><h2>Clean up duplicates</h2><span class="gs-step">STEP 04</span></div>
             @if (_result.Duplicates.Groups.Count == 0)
             {
-                <p>No duplicate identifiers were found. Nothing needs reviewing.</p>
+                <p>No duplicate records found.</p>
+            }
+            else if (ReviewComplete)
+            {
+                <h3>You're all caught up!</h3>
+                <p>You've reviewed all @_result.Duplicates.Groups.Count duplicate groups.</p>
+                <p><strong>@_decisions.Count</strong> combined · <strong>@_skipped.Count</strong> kept separate · <strong>@_result.Report.OutputRows</strong> records in the cleaned preview.</p>
+                <button class="btn btn-outline-secondary" @onclick="ReviewAgain">Review decisions</button>
             }
             else
             {
-                var groups = _result.Duplicates.Groups;
-                var group = groups[_reviewIndex];
+                var group = _result.Duplicates.Groups[_reviewIndex];
                 var id = group.RowIndices[0];
                 var draft = _drafts[id];
-                var questionIndex = Math.Min(_questionIndex, Math.Max(0, group.ConflictingColumns.Count - 1));
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <div>
-                        <div class="gs-page-kicker">DUPLICATE @(_reviewIndex + 1) OF @groups.Count</div>
-                        <h3 class="mb-1">Site / ID: @string.Join(", ", group.Key.Values)</h3>
-                    </div>
-                    <span class="gs-note">@(_decisions.ContainsKey(id) ? "Confirmed" : _skipped.Contains(id) ? "Keeping separate" : "Needs review")</span>
+                <div class="gs-page-kicker">DUPLICATE @(_reviewIndex + 1) OF @_result.Duplicates.Groups.Count</div>
+                <h3 class="mt-2">Site / ID: @string.Join(", ", group.Key.Values)</h3>
+                <div class="progress mb-4" role="progressbar" aria-label="Review progress" aria-valuenow="@(_reviewIndex + 1)" aria-valuemin="0" aria-valuemax="@_result.Duplicates.Groups.Count">
+                    <div class="progress-bar" style="@($"width:{100.0 * (_reviewIndex + 1) / _result.Duplicates.Groups.Count:F1}%")"></div>
                 </div>
-                <div class="progress mb-3" role="progressbar" aria-label="Duplicate review progress" aria-valuenow="@(_reviewIndex + 1)" aria-valuemin="0" aria-valuemax="@groups.Count">
-                    <div class="progress-bar" style="@($"width:{100.0 * (_reviewIndex + 1) / groups.Count:F1}%")"></div>
-                </div>
-                @if (group.HasConflicts)
+                @if (!_showSummary && group.HasConflicts)
                 {
-                    var column = group.ConflictingColumns[questionIndex];
-                    <div class="border rounded p-3 mb-3">
-                        <div class="gs-page-kicker">QUESTION @(questionIndex + 1) OF @group.ConflictingColumns.Count</div>
-                        <h4 class="mt-2">Which @column value is correct?</h4>
-                        <p class="gs-note">These uploaded files disagree. Select the correct value. If you aren't sure, keep the records separate.</p>
-                        @foreach (var index in group.RowIndices)
-                        {
-                            var row = _result.Merged.Rows[index];
-                            var value = row.Columns.TryGetValue(column, out var cell) ? cell : null;
-                            <label class="d-block border rounded p-3 mb-2" style="cursor:pointer">
-                                <input type="radio" name="@($"choice-{id}-{column}")" checked="@(draft.Sources.TryGetValue(column, out var chosen) && chosen == index)" @onchange="() => ChooseAnswer(id, column, index)" />
-                                <strong class="ms-2">@(string.IsNullOrWhiteSpace(value) ? "(No value)" : value)</strong>
-                                <div class="gs-note ms-4">From @row.SourceDataset · row @row.SourceRowNumber</div>
-                            </label>
-                        }
-                        <div class="d-flex justify-content-between mt-3 gap-2">
-                            <button class="btn btn-outline-secondary" disabled="@(questionIndex == 0)" @onclick="PreviousQuestion">← Previous question</button>
-                            <button class="btn btn-primary" disabled="@(!draft.Sources.ContainsKey(column))" @onclick="NextQuestion">
-                                @(questionIndex == group.ConflictingColumns.Count - 1 ? "Review my choices →" : "Next question →")
-                            </button>
-                        </div>
-                    </div>
+                    var column = group.ConflictingColumns[_questionIndex];
+                    <h4>Which @column value is correct?</h4>
+                    <p class="gs-note">The files disagree. Pick the correct value, or keep both records if you're unsure.</p>
+                    @foreach (var index in group.RowIndices)
+                    {
+                        var row = _result.Merged.Rows[index];
+                        var value = row.Columns.TryGetValue(column, out var cell) ? cell : null;
+                        <label class="d-block border rounded p-3 mb-2" style="cursor:pointer">
+                            <input type="radio" name="@($"answer-{id}-{_questionIndex}")" checked="@(draft.Sources.TryGetValue(column, out var selected) && selected == index)" @onchange="() => ChooseAnswer(id, column, index)" />
+                            <strong class="ms-2">@(string.IsNullOrWhiteSpace(value) ? "(No value)" : value)</strong>
+                            <div class="gs-note ms-4">@row.SourceDataset · row @row.SourceRowNumber</div>
+                        </label>
+                    }
+                    <button class="btn btn-primary mt-3" disabled="@(!draft.Sources.ContainsKey(column))" @onclick="NextQuestion">Continue →</button>
                 }
                 else
                 {
-                    <div class="alert alert-info">These records have matching values. You can keep one copy or leave both unchanged.</div>
-                }
-
-                @if (!group.HasConflicts || _showSummary)
-                {
-                    <div class="border rounded p-3 mb-3">
-                        <h4>Here's what your cleaned record will contain</h4>
-                        <p class="gs-note">GeoShift will retain one record for this identifier only if you confirm. Values not in conflict are taken from the first uploaded record; missing fields are not filled automatically.</p>
-                        <div class="gs-preview-table">
-                            <table class="table table-hover">
-                                <tbody>
-                                    @foreach (var column in _result.Merged.Columns)
-                                    {
-                                        var sourceIndex = GetSource(id, column);
-                                        var row = _result.Merged.Rows[sourceIndex];
-                                        <tr><th scope="row">@column</th><td>@(row.Columns.TryGetValue(column, out var cell) ? cell : "")</td></tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                        <button class="btn btn-primary" disabled="@(group.ConflictingColumns.Any(column => !draft.Sources.ContainsKey(column)))" @onclick="() => Approve(id)">Confirm — keep one cleaned record</button>
-                        @if (_decisions.ContainsKey(id))
-                        {
-                            <button class="btn btn-outline-secondary ms-2" @onclick="() => Undo(id)">Undo confirmation</button>
-                        }
+                    <h4>@(group.HasConflicts ? "Does this look right?" : "These records match. Keep one copy?")</h4>
+                    <p class="gs-note">This is the record GeoShift will keep if you confirm. Your uploaded files remain unchanged.</p>
+                    <div class="gs-preview-table mb-3">
+                        <table class="table table-hover">
+                            <tbody>
+                                @foreach (var column in _result.Merged.Columns)
+                                {
+                                    var row = _result.Merged.Rows[GetSource(id, column)];
+                                    <tr><th scope="row">@column</th><td>@(row.Columns.TryGetValue(column, out var value) ? value : "")</td></tr>
+                                }
+                            </tbody>
+                        </table>
                     </div>
+                    <button class="btn btn-primary" @onclick="() => Approve(id)">Confirm &amp; next →</button>
                 }
-                <div class="d-flex flex-wrap gap-2 mb-3">
-                    <button class="btn btn-outline-secondary" @onclick="() => Skip(id)">I'm not sure — keep all records</button>
+                <div class="mt-3">
+                    <a href="#" @onclick="() => Skip(id)" @onclick:preventDefault="true">I'm not sure — keep both records</a>
                 </div>
-                <div class="d-flex justify-content-between gap-2">
-                    <button class="btn btn-outline-secondary" disabled="@(_reviewIndex == 0)" @onclick="PreviousGroup">← Previous duplicate</button>
-                    <button class="btn btn-outline-primary" disabled="@(_reviewIndex == groups.Count - 1)" @onclick="NextGroup">Next duplicate →</button>
-                </div>
-                <p class="gs-note mt-3">@_decisions.Count confirmed · @_skipped.Count kept separate · @(groups.Count - _decisions.Count - _skipped.Count) awaiting review · @_result.Report.OutputRows output records</p>
-                <button class="btn btn-outline-secondary" disabled="@(_decisions.Count == 0 && _skipped.Count == 0)" @onclick="ResetDecisions">Reset all choices</button>
+                @if (_questionIndex > 0 || _showSummary)
+                {
+                    <div class="mt-2"><a href="#" @onclick="BackOneStep" @onclick:preventDefault="true">← Change my answer</a></div>
+                }
+                <p class="gs-note mt-4">@_decisions.Count confirmed · @_skipped.Count kept separate · @_result.Report.OutputRows output records</p>
             }
         </section>
     }
@@ -180,6 +159,7 @@
     private int _reviewIndex;
     private int _questionIndex;
     private bool _showSummary;
+    private bool ReviewComplete => _result is not null && _reviewIndex >= _result.Duplicates.Groups.Count;
     private readonly HashSet<int> _skipped = [];
 
     private sealed class DraftDecision
@@ -205,9 +185,17 @@
         RefreshResolution();
     }
 
-    private void PreviousQuestion()
+    private void BackOneStep()
     {
-        if (_questionIndex > 0) { _questionIndex--; _showSummary = false; }
+        if (_showSummary) { _showSummary = false; _questionIndex = Math.Max(0, _questionIndex); }
+        else if (_questionIndex > 0) _questionIndex--;
+    }
+
+    private void ReviewAgain()
+    {
+        _reviewIndex = 0;
+        _questionIndex = 0;
+        _showSummary = false;
     }
 
     private void NextQuestion()
@@ -244,7 +232,9 @@
     private void PreviousGroup() { if (_reviewIndex > 0) { _reviewIndex--; _questionIndex = 0; _showSummary = false; } }
     private void NextGroup()
     {
-        if (_result is not null && _reviewIndex + 1 < _result.Duplicates.Groups.Count) { _reviewIndex++; _questionIndex = 0; _showSummary = false; }
+        if (_result is not null && _reviewIndex < _result.Duplicates.Groups.Count) _reviewIndex++;
+        _questionIndex = 0;
+        _showSummary = false;
     }
     private void ResetDecisions()
     {
