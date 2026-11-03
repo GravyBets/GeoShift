@@ -72,6 +72,62 @@
                 </table>
             </div>
         </section>
+
+        <section class="gs-panel">
+            <div class="gs-panel-heading"><h2>Resolve duplicates</h2><span class="gs-step">STEP 04</span></div>
+            <p class="gs-note">Review records and explicitly approve each consolidation. Unapproved groups retain every row.</p>
+            @foreach (var group in _result.Duplicates.Groups.Take(20))
+            {
+                var id = group.RowIndices[0];
+                var draft = _drafts[id];
+                <div class="border rounded p-3 mb-3" @key="id">
+                    <strong>Identifier: @string.Join(", ", group.Key.Values)</strong>
+                    <p class="gs-note">@(group.HasConflicts ? "Conflicting values require review" : "No conflicting values") · @(_decisions.ContainsKey(id) ? "Approved" : "Pending")</p>
+                    <label class="form-label">Base record to retain</label>
+                    <select class="form-select mb-2" value="@draft.KeepRow" @onchange="e => ChangeKeep(id, e.Value?.ToString())">
+                        @foreach (var index in group.RowIndices)
+                        {
+                            var row = _result.Merged.Rows[index];
+                            <option value="@index">@row.SourceDataset — row @row.SourceRowNumber</option>
+                        }
+                    </select>
+                    <div class="gs-preview-table">
+                        <table class="table table-hover">
+                            <thead><tr><th>Field</th>@foreach (var index in group.RowIndices) { <th>@_result.Merged.Rows[index].SourceDataset</th> }</tr></thead>
+                            <tbody>
+                                @foreach (var column in _result.Merged.Columns)
+                                {
+                                    <tr><th>@column @(group.ConflictingColumns.Contains(column) ? "⚠" : "")</th>
+                                    @foreach (var index in group.RowIndices)
+                                    {
+                                        <td>@(_result.Merged.Rows[index].Columns.TryGetValue(column, out var cell) ? cell : "")</td>
+                                    }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @foreach (var column in group.ConflictingColumns)
+                    {
+                        <label class="form-label">Choose @column value</label>
+                        <select class="form-select mb-2" value="@GetSource(id, column)" @onchange="e => ChangeSource(id, column, e.Value?.ToString())">
+                            @foreach (var index in group.RowIndices)
+                            {
+                                var row = _result.Merged.Rows[index];
+                                <option value="@index">@row.SourceDataset: @(row.Columns.TryGetValue(column, out var cell) ? cell : "(empty)")</option>
+                            }
+                        </select>
+                    }
+                    <button class="btn btn-primary mt-2" @onclick="() => Approve(id)">Approve consolidation</button>
+                    @if (_decisions.ContainsKey(id))
+                    {
+                        <button class="btn btn-outline-secondary mt-2 ms-2" @onclick="() => Undo(id)">Undo</button>
+                    }
+                </div>
+            }
+            <p class="gs-note">@_decisions.Count approved group(s); @_result.Report.OutputRows rows in preview output. Only the first 20 groups are available for review.</p>
+            <button class="btn btn-outline-secondary" @onclick="ResetDecisions" disabled="@(_decisions.Count == 0)">Reset all approvals</button>
+        </section>
     }
 </div>
 
@@ -89,12 +145,68 @@
     private string? _error;
     private bool _busy;
 
+    private sealed class DraftDecision
+    {
+        public int KeepRow { get; set; }
+        public Dictionary<string, int> Sources { get; } = new(StringComparer.OrdinalIgnoreCase);
+    }
+    private readonly Dictionary<int, DraftDecision> _drafts = [];
+    private readonly Dictionary<int, ConflictResolutionDecision> _decisions = [];
+
+    private int GetSource(int id, string column) =>
+        _drafts[id].Sources.TryGetValue(column, out var index) ? index : _drafts[id].KeepRow;
+
+    private void ChangeKeep(int id, string? raw)
+    {
+        if (!int.TryParse(raw, out var index)) return;
+        _drafts[id].KeepRow = index;
+        _decisions.Remove(id);
+    }
+
+    private void ChangeSource(int id, string column, string? raw)
+    {
+        if (!int.TryParse(raw, out var index)) return;
+        _drafts[id].Sources[column] = index;
+        _decisions.Remove(id);
+    }
+
+    private void Approve(int id)
+    {
+        var draft = _drafts[id];
+        _decisions[id] = new ConflictResolutionDecision(draft.KeepRow,
+            new Dictionary<string, int>(draft.Sources, StringComparer.OrdinalIgnoreCase));
+        RefreshResolution();
+    }
+
+    private void Undo(int id) { _decisions.Remove(id); RefreshResolution(); }
+    private void ResetDecisions() { _decisions.Clear(); RefreshResolution(); }
+
+    private void RefreshResolution()
+    {
+        if (_result is null) return;
+        try
+        {
+            var resolved = new ConflictResolutionEngine().Resolve(
+                _result.Merged, _result.Duplicates, _decisions.Values.ToArray());
+            var report = new MigrationReportEngine().Build(_result.Merged, _result.Duplicates, resolved);
+            _result = _result with { Resolved = resolved, Report = report };
+            _error = null;
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidDataException)
+        {
+            _error = ex.Message;
+        }
+    }
+
+
     private async Task LoadFiles(InputFileChangeEventArgs args)
     {
         _busy = true;
         _error = null;
         _result = null;
         _datasets.Clear();
+        _drafts.Clear();
+        _decisions.Clear();
         try
         {
             var files = args.GetMultipleFiles(3);
@@ -134,18 +246,24 @@
     {
         if (column is not null && dataset.Columns.Contains(column)) dataset.KeyColumn = column;
         _result = null;
+        _drafts.Clear();
+        _decisions.Clear();
     }
 
     private void RunPreview()
     {
         _error = null;
         _result = null;
+        _drafts.Clear();
+        _decisions.Clear();
         try
         {
             var inputs = _datasets.Select(d => new MigrationWorkflowDataset(
                 d.Name, d.Rows, new[] { new ColumnMappingRule(d.KeyColumn, "GeoShift Match Key") })).ToArray();
             _result = new MigrationWorkflowEngine().Execute(
                 new MigrationWorkflowRequest(inputs, ["GeoShift Match Key"], []));
+            foreach (var group in _result.Duplicates.Groups.Take(20))
+                _drafts.Add(group.RowIndices[0], new DraftDecision { KeepRow = group.RowIndices[0] });
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException)
         {
