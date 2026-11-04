@@ -166,6 +166,50 @@
         </section>
 
         <section class="gs-panel">
+            <div class="gs-panel-heading"><h2>Validate data</h2><span class="gs-step">QUALITY CHECK</span></div>
+            <p class="gs-note">Choose which fields must have values. GeoShift checks the current cleaned preview, including any confirmed duplicate decisions. Nothing is edited automatically.</p>
+            <div class="mb-3">
+                @foreach (var column in _result.Merged.Columns)
+                {
+                    <label class="d-inline-block me-3 mb-2">
+                        <input type="checkbox" checked="@_requiredColumns.Contains(column)"
+                               @onchange="e => SetRequiredColumn(column, e.Value is true)" />
+                        @column
+                    </label>
+                }
+            </div>
+            <p><strong>@CurrentValidation.ErrorCount missing required values</strong> · <strong>@CurrentValidation.WarningCount formatting warnings</strong></p>
+            @if (CurrentValidation.Issues.Count == 0)
+            {
+                <p class="gs-note">No issues found under the selected checks.</p>
+            }
+            else
+            {
+                <div class="gs-preview-table">
+                    <table class="table table-hover">
+                        <thead><tr><th>Severity</th><th>Source</th><th>Row</th><th>Column</th><th>Finding</th></tr></thead>
+                        <tbody>
+                            @foreach (var issue in CurrentValidation.Issues.Take(50))
+                            {
+                                <tr>
+                                    <td>@issue.Severity</td>
+                                    <td>@issue.SourceDataset</td>
+                                    <td>@issue.SourceRowNumber</td>
+                                    <td>@issue.Column</td>
+                                    <td>@issue.Message</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (CurrentValidation.Issues.Count > 50)
+                {
+                    <p class="gs-note">Showing the first 50 of @CurrentValidation.Issues.Count findings.</p>
+                }
+            }
+        </section>
+
+        <section class="gs-panel">
             <div class="gs-panel-heading"><h2>Clean up duplicates</h2><span class="gs-step">STEP 04</span></div>
             @if (_result.Duplicates.Groups.Count == 0)
             {
@@ -323,6 +367,7 @@
             foreach (var column in dataset.Columns) dataset.OutputNames[column] = saved.OutputNames[column];
         }
         _result = null;
+        _requiredColumns.Clear();
         _drafts.Clear();
         _decisions.Clear();
         _skipped.Clear();
@@ -412,6 +457,17 @@
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(csv));
         using var reference = new DotNetStreamReference(stream);
         await JS.InvokeVoidAsync("geoShiftDownloadFile", name, reference);
+    }
+
+    private readonly HashSet<string> _requiredColumns = new(StringComparer.OrdinalIgnoreCase);
+    private MigrationValidationResult CurrentValidation => _result is null
+        ? new MigrationValidationResult([])
+        : MigrationValidationEngine.Validate(_result.Resolved, _result.Merged.Columns, _requiredColumns);
+
+    private void SetRequiredColumn(string column, bool required)
+    {
+        if (required) _requiredColumns.Add(column);
+        else _requiredColumns.Remove(column);
     }
 
     private int CountKind(DuplicateGroupKind kind) => _result is null ? 0 :
@@ -558,6 +614,7 @@
         _error = null;
         _result = null;
         _datasets.Clear();
+        _requiredColumns.Clear();
         _confirmMappings = false;
         _drafts.Clear();
         _decisions.Clear();
@@ -656,6 +713,8 @@
                     column == d.KeyColumn ? "GeoShift Match Key" : d.OutputNames[column])).ToArray())).ToArray();
             _result = new MigrationWorkflowEngine().Execute(
                 new MigrationWorkflowRequest(inputs, ["GeoShift Match Key"], []));
+            _requiredColumns.Clear();
+            _requiredColumns.Add("GeoShift Match Key");
             foreach (var group in _result.Duplicates.Groups)
                 _drafts.Add(group.RowIndices[0], new DraftDecision { KeepRow = group.RowIndices[0] });
         }
