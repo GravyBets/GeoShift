@@ -209,6 +209,40 @@
             }
         </section>
 
+        @if (ReviewComplete || _result.Duplicates.Groups.Count == 0)
+        {
+            <section class="gs-panel">
+                <div class="gs-panel-heading"><h2>Correct flagged values</h2><span class="gs-step">QUALITY CHECK</span></div>
+                <p class="gs-note">Corrections change only the exported preview. Each edit requires confirmation and is recorded in the correction audit.</p>
+                <p><strong>@_corrections.Count approved corrections</strong> · <strong>@CurrentValidation.Issues.Count remaining findings</strong></p>
+                @if (_editingIssue is not null)
+                {
+                    var issue = _editingIssue;
+                    var row = CorrectedRows.Rows.First(r => r.OriginalRowIndex == issue.OriginalRowIndex);
+                    row.Columns.TryGetValue(issue.Column, out var before);
+                    <p><strong>@issue.SourceDataset · row @issue.SourceRowNumber · @issue.Column</strong></p>
+                    <p>Current: <code>@(before ?? "(empty)")</code></p>
+                    <label class="form-label">Replacement value</label>
+                    <input class="form-control mb-2" @bind="_replacementValue" />
+                    <p>Preview: <code>@_replacementValue</code></p>
+                    <button class="btn btn-primary me-2" @onclick="ConfirmCorrection">Confirm correction</button>
+                    <button class="btn btn-outline-secondary" @onclick="CancelCorrection">Cancel</button>
+                }
+                else if (CurrentValidation.Issues.Count > 0)
+                {
+                    var issue = CurrentValidation.Issues[0];
+                    <p><strong>@issue.SourceDataset · row @issue.SourceRowNumber · @issue.Column</strong></p>
+                    <p>@issue.Message</p>
+                    <button class="btn btn-primary" @onclick="() => StartCorrection(issue)">Correct this value</button>
+                    <p class="gs-note mt-2">You can leave a finding unresolved and still export; the validation report will show it.</p>
+                }
+                else
+                {
+                    <p>No remaining validation findings.</p>
+                }
+            </section>
+        }
+
         <section class="gs-panel">
             <div class="gs-panel-heading"><h2>Clean up duplicates</h2><span class="gs-step">STEP 04</span></div>
             @if (_result.Duplicates.Groups.Count == 0)
@@ -289,6 +323,7 @@
                 <div class="gs-panel-heading"><h2>Download your results</h2><span class="gs-step">STEP 05</span></div>
                 <p><strong>@_result.Report.ImportedRows imported → @_result.Report.OutputRows final records.</strong> @_decisions.Count groups combined; @_skipped.Count kept separate. Verify these totals before downloading. Original uploads remain unchanged.</p>
                 <button class="btn btn-primary me-2 mb-2" @onclick="DownloadCleaned">Download cleaned CSV</button>
+                <button class="btn btn-outline-primary me-2 mb-2" @onclick="DownloadCorrections">Download correction audit</button>
                 <button class="btn btn-outline-primary mb-2" @onclick="DownloadAudit">Download audit report</button>
             </section>
         }
@@ -442,7 +477,22 @@
     {
         if (_result is null) return;
         await DownloadCsv("GeoShift_Cleaned_Data.csv",
-            MigrationCsvExporter.Cleaned(_result.Merged, _result.Resolved));
+            MigrationCsvExporter.Cleaned(_result.Merged, CorrectedRows));
+    }
+
+    private async Task DownloadCorrections()
+    {
+        if (_result is null) return;
+        var csv = new StringBuilder("Source file,Source row,Column,Original value,Corrected value\r\n");
+        foreach (var change in _corrections.Values.OrderBy(x => x.OriginalRowIndex).ThenBy(x => x.Column))
+        {
+            var row = _result.Resolved.Rows.First(r => r.OriginalRowIndex == change.OriginalRowIndex);
+            csv.AppendLine(string.Join(",", new[] { row.SourceDataset, row.SourceRowNumber.ToString(),
+                change.Column, change.OriginalValue ?? "", change.CorrectedValue ?? "" }
+                .Select(value => "\"" + (value.TrimStart().Length > 0 && "=+-@".Contains(value.TrimStart()[0]) ? "'" : "") +
+                    value.Replace("\"", "\"\"") + "\"")));
+        }
+        await DownloadCsv("GeoShift_Correction_Audit.csv", csv.ToString());
     }
 
     private async Task DownloadAudit()
@@ -459,10 +509,40 @@
         await JS.InvokeVoidAsync("geoShiftDownloadFile", name, reference);
     }
 
+    private readonly Dictionary<(int, string), MigrationCorrection> _corrections = [];
+    private MigrationValidationIssue? _editingIssue;
+    private string _replacementValue = "";
+    private ConflictResolutionResult CorrectedRows => _result is null
+        ? new ConflictResolutionResult([], [])
+        : MigrationCorrectionEngine.Apply(_result.Resolved, _result.Merged.Columns, _corrections.Values.ToArray()).Resolved;
+
+    private void StartCorrection(MigrationValidationIssue issue)
+    {
+        _editingIssue = issue;
+        var row = CorrectedRows.Rows.First(r => r.OriginalRowIndex == issue.OriginalRowIndex);
+        _replacementValue = row.Columns.TryGetValue(issue.Column, out var value) ? value ?? "" : "";
+    }
+
+    private void CancelCorrection() => _editingIssue = null;
+
+    private void ConfirmCorrection()
+    {
+        if (_result is null || _editingIssue is null) return;
+        var issue = _editingIssue;
+        var row = _result.Resolved.Rows.First(r => r.OriginalRowIndex == issue.OriginalRowIndex);
+        row.Columns.TryGetValue(issue.Column, out var original);
+        var key = (issue.OriginalRowIndex, issue.Column.ToUpperInvariant());
+        if (string.Equals(original ?? "", _replacementValue, StringComparison.Ordinal))
+            _corrections.Remove(key);
+        else
+            _corrections[key] = new MigrationCorrection(issue.OriginalRowIndex, issue.Column, original, _replacementValue);
+        _editingIssue = null;
+    }
+
     private readonly HashSet<string> _requiredColumns = new(StringComparer.OrdinalIgnoreCase);
     private MigrationValidationResult CurrentValidation => _result is null
         ? new MigrationValidationResult([])
-        : MigrationValidationEngine.Validate(_result.Resolved, _result.Merged.Columns, _requiredColumns);
+        : MigrationValidationEngine.Validate(CorrectedRows, _result.Merged.Columns, _requiredColumns);
 
     private void SetRequiredColumn(string column, bool required)
     {
@@ -593,6 +673,8 @@
     private void RefreshResolution()
     {
         if (_result is null) return;
+        _corrections.Clear();
+        _editingIssue = null;
         try
         {
             var resolved = new ConflictResolutionEngine().Resolve(
@@ -614,6 +696,8 @@
         _error = null;
         _result = null;
         _datasets.Clear();
+        _corrections.Clear();
+        _editingIssue = null;
         _requiredColumns.Clear();
         _confirmMappings = false;
         _drafts.Clear();
@@ -688,6 +772,8 @@
 
     private void RunPreview()
     {
+        _corrections.Clear();
+        _editingIssue = null;
         _error = null;
         _result = null;
         _drafts.Clear();
