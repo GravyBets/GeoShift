@@ -147,6 +147,39 @@
                     }
                 </div>
             }
+            @if (RecoverablePendingCount > 0)
+            {
+                <div class="border rounded p-3 mb-3">
+                    <strong>@RecoverablePendingCount groups with recoverable missing information</strong>
+                    <p class="gs-note">Each proposed value is the only non-empty value for that field across its matching records. Genuine disagreements are excluded.</p>
+                    @if (!_confirmRecoverable)
+                    {
+                        <button class="btn btn-outline-primary" @onclick="() => _confirmRecoverable = true">Review recoverable values</button>
+                    }
+                    else
+                    {
+                        <p><strong>Preview:</strong> @RecoverablePendingCount groups will be combined. The values below will fill empty cells; original files remain unchanged.</p>
+                        <div class="gs-preview-table mb-3" style="max-height:280px;overflow:auto">
+                            <table class="table table-sm">
+                                <thead><tr><th>Identifier</th><th>Field</th><th>Recovered value</th><th>Source</th></tr></thead>
+                                <tbody>
+                                    @foreach (var proposal in RecoverableProposals)
+                                    {
+                                        @foreach (var fill in proposal.Fills)
+                                        {
+                                            var sourceRow = _result.Merged.Rows[fill.Value];
+                                            <tr><td>@string.Join(", ", proposal.Group.Key.Values)</td><td>@fill.Key</td><td>@sourceRow.Columns[fill.Key]</td><td>@sourceRow.SourceDataset · row @sourceRow.SourceRowNumber</td></tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="gs-note">All @RecoverablePendingCount groups are listed above. Confirm only if the proposed values are correct.</p>
+                        <button class="btn btn-primary me-2" @onclick="ApproveRecoverable">Approve recoverable groups</button>
+                        <button class="btn btn-outline-secondary" @onclick="() => _confirmRecoverable = false">Cancel</button>
+                    }
+                </div>
+            }
             <div class="gs-preview-table">
                 <table class="table table-hover">
                     <thead><tr><th>Identifier</th><th>Records</th><th>Review type</th><th>Fields to review</th></tr></thead>
@@ -579,6 +612,58 @@
         _confirmExact = false;
         RefreshResolution();
         while (_reviewIndex < _result.Duplicates.Groups.Count && _decisions.ContainsKey(_result.Duplicates.Groups[_reviewIndex].RowIndices[0])) _reviewIndex++;
+    }
+    private bool _confirmRecoverable;
+    private sealed record RecoverableProposal(DuplicateGroup Group, Dictionary<string, int> Fills);
+    private List<RecoverableProposal> RecoverableProposals
+    {
+        get
+        {
+            var proposals = new List<RecoverableProposal>();
+            if (_result is null) return proposals;
+            foreach (var group in _result.Duplicates.Groups)
+            {
+                var id = group.RowIndices[0];
+                if (_decisions.ContainsKey(id) || _skipped.Contains(id) ||
+                    DuplicateGroupClassifier.Classify(_result.Merged, group).Kind != DuplicateGroupKind.Complementary)
+                    continue;
+                var fills = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                var safe = true;
+                foreach (var column in group.ConflictingColumns)
+                {
+                    var present = group.RowIndices.Where(i =>
+                        _result.Merged.Rows[i].Columns.TryGetValue(column, out var value) &&
+                        !string.IsNullOrWhiteSpace(value)).ToArray();
+                    var unique = present.Select(i => _result.Merged.Rows[i].Columns[column])
+                        .Distinct(StringComparer.Ordinal).ToArray();
+                    if (present.Length == 0 || unique.Length != 1) { safe = false; break; }
+                    fills[column] = present[0];
+                }
+                if (safe && fills.Count > 0) proposals.Add(new RecoverableProposal(group, fills));
+            }
+            return proposals;
+        }
+    }
+    private int RecoverablePendingCount => RecoverableProposals.Count;
+    private void ApproveRecoverable()
+    {
+        if (_result is null || !_confirmRecoverable) return;
+        var proposals = RecoverableProposals;
+        foreach (var proposal in proposals)
+        {
+            var id = proposal.Group.RowIndices[0];
+            _decisions[id] = new ConflictResolutionDecision(id,
+                new Dictionary<string, int>(proposal.Fills, StringComparer.OrdinalIgnoreCase));
+            _skipped.Remove(id);
+        }
+        _confirmRecoverable = false;
+        RefreshResolution();
+        while (_reviewIndex < _result.Duplicates.Groups.Count &&
+               (_decisions.ContainsKey(_result.Duplicates.Groups[_reviewIndex].RowIndices[0]) ||
+                _skipped.Contains(_result.Duplicates.Groups[_reviewIndex].RowIndices[0])))
+            _reviewIndex++;
+        _questionIndex = 0;
+        _showSummary = false;
     }
     private int _reviewIndex;
     private int _questionIndex;
