@@ -160,3 +160,16 @@ html,body { font-family:Inter,"Segoe UI",Arial,sans-serif; background:#f8faff; c
 .gs-upload-hint { color:#8a99ae;font-size:.77rem;margin-top:2px; }
 .gs-dropzone input.gs-hidden-file-input { position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:0!important;opacity:0!important;overflow:hidden!important;clip-path:inset(50%)!important;white-space:nowrap!important;pointer-events:none!important; }
 .gs-dropzone:has(input:disabled) { opacity:.7;cursor:wait; }
+
+/* Consistent workspace navigation and progressive disclosure */
+.gs-workflow-nav { display:flex;gap:9px;flex-wrap:wrap;margin:-10px 0 30px; }
+.gs-workflow-nav a { display:inline-flex;align-items:center;padding:9px 14px;border:1px solid var(--gs-line);border-radius:999px;background:#fff;color:#49617e;text-decoration:none;font-size:.83rem;font-weight:700; }
+.gs-workflow-nav a:hover,.gs-workflow-nav a:focus-visible { color:var(--gs-blue);border-color:#a7c3f5;background:#f1f6ff; }
+.gs-secondary-details { border:1px solid var(--gs-line);border-radius:12px;padding:14px 16px;background:#fbfcff; }
+.gs-secondary-details summary { cursor:pointer;color:#3b5b84;font-weight:700; }
+.gs-secondary-details[open] summary { margin-bottom:8px; }
+.gs-workspace-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.gs-feature-link { display:inline-block;margin-top:22px;color:var(--gs-blue);font-size:.9rem;font-weight:750;text-decoration:none; }
+.gs-feature-link:hover { text-decoration:underline; }
+.gs-panel { scroll-margin-top:24px; }
+@media(max-width:700px) { .gs-workspace-grid { grid-template-columns:1fr; } .gs-workflow-nav a { flex:1;justify-content:center; } }
