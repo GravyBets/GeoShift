@@ -70,19 +70,19 @@ window.geoShiftSetupDropzone = (id) => {
         if (!input || input.disabled) return;
 
         const files = event.dataTransfer?.files;
-        if (!files || files.length !== 1) {
-            window.alert("Please drop one KML or KMZ file at a time.");
+        const migration = id === "gs-migration-dropzone";
+        const maxFiles = migration ? 3 : 1;
+        const extensions = migration ? [".csv", ".xlsx"] : [".kml", ".kmz"];
+        if (!files || files.length < 1 || files.length > maxFiles) {
+            window.alert(migration ? "Please drop up to three CSV or Excel files." : "Please drop one KML or KMZ file at a time.");
             return;
         }
-
-        const name = files[0].name.toLowerCase();
-        if (!name.endsWith(".kml") && !name.endsWith(".kmz")) {
-            window.alert("Please select a KML or KMZ file.");
+        if (Array.from(files).some(file => !extensions.some(ext => file.name.toLowerCase().endsWith(ext)))) {
+            window.alert(migration ? "Please select CSV or XLSX files." : "Please select a KML or KMZ file.");
             return;
         }
-
         const transfer = new DataTransfer();
-        transfer.items.add(files[0]);
+        for (const file of files) transfer.items.add(file);
         input.files = transfer.files;
         input.dispatchEvent(new Event("change", { bubbles: true }));
     });
