@@ -231,7 +231,7 @@
                             </table>
                         </div>
                         <p class="gs-note">All @RecoverablePendingCount groups are listed above. Confirm only if the proposed values are correct.</p>
-                        <button class="btn btn-primary me-2" @onclick="ApproveRecoverable">Approve recoverable groups</button>
+                        <button class="btn btn-primary me-2" @onclick="ApproveRecoverable" disabled="@(!CanChangeReview)" title="Restore or start a new review if recovery is pending">Approve recoverable groups</button>
                         <button class="btn btn-outline-secondary" @onclick="() => _confirmRecoverable = false">Cancel</button>
                     }
                 </div>
@@ -248,7 +248,7 @@
                     else
                     {
                         <p>Confirm: @UnreviewedCount groups will remain as separate records. Previously approved merges won't change.</p>
-                        <button class="btn btn-primary me-2" @onclick="KeepRemainingSeparate">Keep remaining groups separate</button>
+                        <button class="btn btn-primary me-2" @onclick="KeepRemainingSeparate" disabled="@(!CanChangeReview)" title="Restore or start a new review if recovery is pending">Keep remaining groups separate</button>
                         <button class="btn btn-outline-secondary" @onclick="() => _confirmKeepRemaining = false">Cancel</button>
                     }
                 </div>
@@ -354,6 +354,10 @@
 
         <section class="gs-panel">
             <div class="gs-panel-heading"><h2>Clean up duplicates</h2><span class="gs-step">STEP 04</span></div>
+            @if (!CanChangeReview)
+            {
+                <p class="alert alert-warning" role="status">Review decisions are paused while a saved checkpoint is pending. Use the recovery controls at the top of this page to restore your decisions or confirm a new review.</p>
+            }
             @if (_checkpointNeedsRestore)
             {
                 <div class="alert alert-warning" role="alert">
