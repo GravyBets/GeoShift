@@ -12,6 +12,15 @@
     <div class="gs-page-kicker">DATA MIGRATION WORKSPACE</div>
     <h1 class="gs-page-title">Merge and review your data.</h1>
     <p class="gs-page-description">Import files, match columns, review duplicates, and export clean data. You decide which records to combine.</p>
+    <div class="gs-checkpoint-bar">
+        <button class="btn btn-outline-primary btn-sm" @onclick="RestoreCheckpoint">Restore saved decisions</button>
+        @if (_result is not null)
+        {
+            <button class="btn btn-outline-secondary btn-sm" @onclick="SaveCheckpoint">Save review progress</button>
+        }
+        <button class="btn btn-link btn-sm" @onclick="ClearCheckpoint">Clear saved review</button>
+        <span class="gs-note" role="status">@_checkpointMessage</span>
+    </div>
     <nav class="gs-workflow-nav" aria-label="Migration workflow">
         <a href="#gs-import">1. Import</a>
         <a href="#gs-match">2. Match</a>
@@ -422,6 +431,77 @@
 </div>
 
 @code {
+    private sealed record CheckpointDecision(int Group, int Keep, Dictionary<string,int> Sources);
+    private sealed record ReviewCheckpoint(string Fingerprint, List<CheckpointDecision> Decisions, List<int> Skipped, int Position);
+    private string? _checkpointMessage;
+    private string DatasetFingerprint() => string.Join("|", _datasets.Select(d =>
+        d.Name + ":" + d.Rows.Count + ":" + d.KeyColumn + ":" +
+        string.Join(",", d.Columns.Select(c => c + "=" + d.OutputNames[c])) + ":" +
+        string.Join(";", d.Rows.Select(r => string.Join(",", d.Columns.Select(c => r.TryGetValue(c, out var v) ? v : ""))))));
+    private async Task SaveCheckpoint()
+    {
+        if (_result is null) return;
+        var groups = _result.Duplicates.Groups;
+        var decisions = groups.Select((g, i) => (g, i))
+            .Where(x => _decisions.ContainsKey(x.g.RowIndices[0]))
+            .Select(x => {
+                var d = _decisions[x.g.RowIndices[0]];
+                return new CheckpointDecision(x.i, d.KeepRowIndex, new Dictionary<string,int>(d.ColumnSources));
+            }).ToList();
+        var skipped = groups.Select((g, i) => (g, i))
+            .Where(x => _skipped.Contains(x.g.RowIndices[0])).Select(x => x.i).ToList();
+        try
+        {
+            await JS.InvokeVoidAsync("geoShiftReviewCheckpoint.save",
+                JsonSerializer.Serialize(new ReviewCheckpoint(DatasetFingerprint(), decisions, skipped, _reviewIndex)));
+            _checkpointMessage = "Review decisions saved in this browser tab. Reupload the same files after a refresh to restore them.";
+        }
+        catch (Exception) { _checkpointMessage = "Could not save decisions in this browser tab."; }
+    }
+    private async Task RestoreCheckpoint()
+    {
+        if (_result is null) { _checkpointMessage = "Upload the same files and preview the migration first."; return; }
+        try
+        {
+            var json = await JS.InvokeAsync<string?>("geoShiftReviewCheckpoint.load");
+            if (string.IsNullOrWhiteSpace(json)) { _checkpointMessage = "No saved review in this browser tab."; return; }
+            var saved = JsonSerializer.Deserialize<ReviewCheckpoint>(json);
+            if (saved is null || saved.Fingerprint != DatasetFingerprint())
+            {
+                _checkpointMessage = "Files or column mappings differ from the saved review. No decisions restored.";
+                return;
+            }
+            var groups = _result.Duplicates.Groups;
+            var restored = new Dictionary<int, ConflictResolutionDecision>();
+            foreach (var item in saved.Decisions)
+            {
+                if (item.Group < 0 || item.Group >= groups.Count) return;
+                var g = groups[item.Group];
+                if (!g.RowIndices.Contains(item.Keep) || item.Sources.Any(x =>
+                    !g.RowIndices.Contains(x.Value) || !g.ConflictingColumns.Contains(x.Key))) return;
+                restored[g.RowIndices[0]] = new ConflictResolutionDecision(item.Keep,
+                    new Dictionary<string,int>(item.Sources));
+            }
+            _decisions.Clear();
+            foreach (var d in restored) _decisions.Add(d.Key, d.Value);
+            _skipped.Clear();
+            foreach (var index in saved.Skipped)
+                if (index >= 0 && index < groups.Count && !_decisions.ContainsKey(groups[index].RowIndices[0]))
+                    _skipped.Add(groups[index].RowIndices[0]);
+            RefreshResolution();
+            _reviewIndex = Math.Clamp(saved.Position, 0, groups.Count);
+            _questionIndex = 0;
+            _showSummary = false;
+            _checkpointMessage = $"Restored {_decisions.Count} merges and {_skipped.Count} keep-separate decisions.";
+        }
+        catch (Exception) { _checkpointMessage = "Could not restore the saved review."; }
+    }
+    private async Task ClearCheckpoint()
+    {
+        try { await JS.InvokeVoidAsync("geoShiftReviewCheckpoint.clear"); _checkpointMessage = "Saved review cleared."; }
+        catch (Exception) { _checkpointMessage = "Could not clear saved review."; }
+    }
+
     private sealed record SavedFileMapping(string FileName, string KeyColumn, Dictionary<string, string> OutputNames);
     private sealed record SavedMappingTemplate(string Name, List<SavedFileMapping> Files);
 
