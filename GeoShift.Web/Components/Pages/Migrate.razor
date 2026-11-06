@@ -187,6 +187,23 @@
                     }
                 </div>
             }
+            @if (UnreviewedCount > 0)
+            {
+                <div class="border rounded p-3 mb-3">
+                    <strong>@UnreviewedCount groups still need a decision</strong>
+                    <p class="gs-note">Keep all remaining groups separate without answering each question. Existing approved merges are preserved.</p>
+                    @if (!_confirmKeepRemaining)
+                    {
+                        <button class="btn btn-outline-secondary" @onclick="() => _confirmKeepRemaining = true">Review keep-all-remaining option</button>
+                    }
+                    else
+                    {
+                        <p>Confirm: @UnreviewedCount groups will remain as separate records. Previously approved merges won't change.</p>
+                        <button class="btn btn-primary me-2" @onclick="KeepRemainingSeparate">Keep remaining groups separate</button>
+                        <button class="btn btn-outline-secondary" @onclick="() => _confirmKeepRemaining = false">Cancel</button>
+                    }
+                </div>
+            }
             <div class="gs-preview-table">
                 <table class="table table-hover">
                     <thead><tr><th>Identifier</th><th>Records</th><th>Review type</th><th>Fields to review</th></tr></thead>
@@ -357,11 +374,15 @@
                 <p class="gs-note mt-4">@_decisions.Count confirmed · @_skipped.Count kept separate · @_result.Report.OutputRows output records</p>
             }
         </section>
-        @if (ReviewComplete || _result.Duplicates.Groups.Count == 0)
+        @if (_result is not null)
         {
             <section class="gs-panel">
                 <div class="gs-panel-heading"><h2>Download your results</h2><span class="gs-step">STEP 05</span></div>
-                <p><strong>@_result.Report.ImportedRows imported → @_result.Report.OutputRows final records.</strong> @_decisions.Count groups combined; @_skipped.Count kept separate. Verify these totals before downloading. Original uploads remain unchanged.</p>
+                <p><strong>@_result.Report.ImportedRows imported → @_result.Report.OutputRows final records.</strong> @_decisions.Count groups combined; @_skipped.Count kept separate; @UnreviewedCount unreviewed. Original uploads remain unchanged.</p>
+                @if (UnreviewedCount > 0)
+                {
+                    <div class="alert alert-warning" role="status"><strong>Partial review:</strong> @UnreviewedCount duplicate groups remain unreviewed. Their source records are kept separately in this export, and the audit identifies them as "Unreviewed".</div>
+                }
                 <button class="btn btn-primary me-2 mb-2" @onclick="DownloadCleaned">Download cleaned CSV</button>
                 <button class="btn btn-outline-primary me-2 mb-2" @onclick="DownloadCorrections">Download correction audit</button>
                 <button class="btn btn-outline-primary mb-2" @onclick="DownloadAudit">Download audit report</button>
@@ -608,6 +629,24 @@
             DuplicateGroupKind.Complementary => "Missing information",
             _ => "Conflicting values"
         };
+    }
+
+    private bool _confirmKeepRemaining;
+    private int UnreviewedCount => _result is null ? 0 :
+        _result.Duplicates.Groups.Count(g => !_decisions.ContainsKey(g.RowIndices[0]) && !_skipped.Contains(g.RowIndices[0]));
+    private void KeepRemainingSeparate()
+    {
+        if (_result is null || !_confirmKeepRemaining) return;
+        foreach (var group in _result.Duplicates.Groups)
+        {
+            var id = group.RowIndices[0];
+            if (!_decisions.ContainsKey(id)) _skipped.Add(id);
+        }
+        _confirmKeepRemaining = false;
+        _reviewIndex = _result.Duplicates.Groups.Count;
+        _questionIndex = 0;
+        _showSummary = false;
+        RefreshResolution();
     }
 
     private bool _confirmExact;
