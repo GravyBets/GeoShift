@@ -143,6 +143,12 @@
     {
         <section class="gs-panel" id="gs-report">
             <div class="gs-panel-heading"><h2>Migration report</h2><span class="gs-step">STEP 03</span></div>
+            <div class="gs-review-dashboard">
+                <div><strong>@_decisions.Count</strong><span>Combined</span></div>
+                <div><strong>@_skipped.Count</strong><span>Kept separate</span></div>
+                <div><strong>@UnreviewedCount</strong><span>Need a decision</span></div>
+                <div><strong>@_result.Report.OutputRows</strong><span>Output records</span></div>
+            </div>
             <div class="gs-stats">
                 <div class="gs-stat"><div class="gs-stat-label">Imported</div><div class="gs-stat-value">@_result.Report.ImportedRows</div></div>
                 <div class="gs-stat"><div class="gs-stat-label">Duplicate groups</div><div class="gs-stat-value">@_result.Report.DuplicateGroups</div></div>
@@ -434,13 +440,15 @@
     private sealed record CheckpointDecision(int Group, int Keep, Dictionary<string,int> Sources);
     private sealed record ReviewCheckpoint(string Fingerprint, List<CheckpointDecision> Decisions, List<int> Skipped, int Position);
     private string? _checkpointMessage;
+    private bool _restoringCheckpoint;
+    private bool _checkpointCleared;
     private string DatasetFingerprint() => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("|", _datasets.Select(d =>
         d.Name + ":" + d.Rows.Count + ":" + d.KeyColumn + ":" +
         string.Join(",", d.Columns.Select(c => c + "=" + d.OutputNames[c])) + ":" +
         string.Join(";", d.Rows.Select(r => string.Join(",", d.Columns.Select(c => r.TryGetValue(c, out var v) ? v : ""))))))));
     private async Task SaveCheckpoint()
     {
-        if (_result is null) return;
+        if (_result is null || _restoringCheckpoint || _checkpointCleared) return;
         var groups = _result.Duplicates.Groups;
         var decisions = groups.Select((g, i) => (g, i))
             .Where(x => _decisions.ContainsKey(x.g.RowIndices[0]))
@@ -454,7 +462,7 @@
         {
             await JS.InvokeVoidAsync("geoShiftReviewCheckpoint.save",
                 JsonSerializer.Serialize(new ReviewCheckpoint(DatasetFingerprint(), decisions, skipped, _reviewIndex)));
-            _checkpointMessage = "Review decisions saved in this browser tab. Reupload the same files after a refresh to restore them.";
+            _checkpointMessage = "Progress saved in this tab. Reupload matching files after refreshing to restore it.";
         }
         catch (Exception) { _checkpointMessage = "Could not save decisions in this browser tab."; }
     }
@@ -482,6 +490,7 @@
                 restored[g.RowIndices[0]] = new ConflictResolutionDecision(item.Keep,
                     new Dictionary<string,int>(item.Sources));
             }
+            _restoringCheckpoint = true;
             _decisions.Clear();
             foreach (var d in restored) _decisions.Add(d.Key, d.Value);
             _skipped.Clear();
@@ -492,13 +501,16 @@
             _reviewIndex = Math.Clamp(saved.Position, 0, groups.Count);
             _questionIndex = 0;
             _showSummary = false;
+            _restoringCheckpoint = false;
+            _checkpointCleared = false;
             _checkpointMessage = $"Restored {_decisions.Count} merges and {_skipped.Count} keep-separate decisions.";
         }
         catch (Exception) { _checkpointMessage = "Could not restore the saved review."; }
+        finally { _restoringCheckpoint = false; }
     }
     private async Task ClearCheckpoint()
     {
-        try { await JS.InvokeVoidAsync("geoShiftReviewCheckpoint.clear"); _checkpointMessage = "Saved review cleared."; }
+        try { _checkpointCleared = true; await JS.InvokeVoidAsync("geoShiftReviewCheckpoint.clear"); _checkpointMessage = "Saved review cleared. Save again to create a new checkpoint."; }
         catch (Exception) { _checkpointMessage = "Could not clear saved review."; }
     }
 
@@ -972,6 +984,7 @@
             var report = new MigrationReportEngine().Build(_result.Merged, _result.Duplicates, resolved);
             _result = _result with { Resolved = resolved, Report = report };
             _error = null;
+            if (!_restoringCheckpoint && !_checkpointCleared) _ = InvokeAsync(SaveCheckpoint);
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidDataException)
         {
@@ -1096,6 +1109,7 @@
                 new MigrationWorkflowRequest(inputs, ["GeoShift Match Key"], []));
             _requiredColumns.Clear();
             _requiredColumns.Add("GeoShift Match Key");
+            _checkpointCleared = false;
             foreach (var group in _result.Duplicates.Groups)
                 _drafts.Add(group.RowIndices[0], new DraftDecision { KeepRow = group.RowIndices[0] });
         }
