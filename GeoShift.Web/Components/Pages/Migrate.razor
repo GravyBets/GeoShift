@@ -327,7 +327,31 @@
                 var group = _result.Duplicates.Groups[_reviewIndex];
                 var id = group.RowIndices[0];
                 var draft = _drafts[id];
-                <div class="gs-page-kicker">DUPLICATE @(_reviewIndex + 1) OF @_result.Duplicates.Groups.Count</div>
+                <div class="gs-review-toolbar">
+                    <div class="gs-page-kicker">DUPLICATE @(_reviewIndex + 1) OF @_result.Duplicates.Groups.Count · @UnreviewedCount undecided</div>
+                    <div class="gs-review-actions">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="PreviousGroup" disabled="@(_reviewIndex == 0)">← Previous</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="NextGroup" disabled="@(_reviewIndex >= _result.Duplicates.Groups.Count - 1)">Next →</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" @onclick="JumpToNextUnreviewed" disabled="@(UnreviewedCount == 0)">Next undecided</button>
+                    </div>
+                </div>
+                <div class="gs-review-jump">
+                    <label for="gs-review-id" class="form-label">Find a Site / ID</label>
+                    <input id="gs-review-id" class="form-control" placeholder="Enter exact identifier" @bind="_jumpIdentifier" @bind:event="oninput" />
+                    <button type="button" class="btn btn-outline-primary" @onclick="JumpToIdentifier">Go to record</button>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(_jumpMessage))
+                {
+                    <p class="gs-note" role="status">@_jumpMessage</p>
+                }
+                @if (_decisions.ContainsKey(id))
+                {
+                    <div class="alert alert-info">This group was already combined. Confirm a different choice to replace the decision, or keep the existing result.</div>
+                }
+                else if (_skipped.Contains(id))
+                {
+                    <div class="alert alert-info">This group is currently kept separate. You can review it again and choose to combine it.</div>
+                }
                 <h3 class="mt-2">Site / ID: @string.Join(", ", group.Key.Values)</h3>
                 <div class="progress mb-4" role="progressbar" aria-label="Review progress" aria-valuenow="@(_reviewIndex + 1)" aria-valuemin="0" aria-valuemax="@_result.Duplicates.Groups.Count">
                     <div class="progress-bar" style="@($"width:{100.0 * (_reviewIndex + 1) / _result.Duplicates.Groups.Count:F1}%")"></div>
@@ -723,6 +747,8 @@
         _showSummary = false;
     }
     private int _reviewIndex;
+    private string _jumpIdentifier = "";
+    private string? _jumpMessage;
     private int _questionIndex;
     private bool _showSummary;
     private bool ReviewComplete => _result is not null && _reviewIndex >= _result.Duplicates.Groups.Count;
@@ -759,9 +785,41 @@
 
     private void ReviewAgain()
     {
-        _reviewIndex = 0;
+        JumpToGroup(0);
+    }
+
+    private void JumpToGroup(int index)
+    {
+        if (_result is null || index < 0 || index >= _result.Duplicates.Groups.Count) return;
+        _reviewIndex = index;
         _questionIndex = 0;
         _showSummary = false;
+        _jumpMessage = null;
+    }
+
+    private void JumpToNextUnreviewed()
+    {
+        if (_result is null) return;
+        var groups = _result.Duplicates.Groups;
+        for (var offset = 1; offset <= groups.Count; offset++)
+        {
+            var index = (_reviewIndex + offset) % groups.Count;
+            var id = groups[index].RowIndices[0];
+            if (_decisions.ContainsKey(id) || _skipped.Contains(id)) continue;
+            JumpToGroup(index);
+            return;
+        }
+        _jumpMessage = "All duplicate groups have a decision.";
+    }
+
+    private void JumpToIdentifier()
+    {
+        if (_result is null || string.IsNullOrWhiteSpace(_jumpIdentifier)) return;
+        var query = _jumpIdentifier.Trim();
+        var index = _result.Duplicates.Groups.ToList().FindIndex(g =>
+            string.Equals(string.Join(", ", g.Key.Values), query, StringComparison.OrdinalIgnoreCase));
+        if (index >= 0) JumpToGroup(index);
+        else _jumpMessage = $"No duplicate group matches '{query}'. Enter the exact Site / ID.";
     }
 
     private void NextQuestion()
@@ -795,12 +853,22 @@
         RefreshResolution();
         NextGroup();
     }
-    private void PreviousGroup() { if (_reviewIndex > 0) { _reviewIndex--; _questionIndex = 0; _showSummary = false; } }
+    private void PreviousGroup()
+    {
+        if (_reviewIndex > 0) JumpToGroup(_reviewIndex - 1);
+    }
+
     private void NextGroup()
     {
-        if (_result is not null && _reviewIndex < _result.Duplicates.Groups.Count) _reviewIndex++;
-        _questionIndex = 0;
-        _showSummary = false;
+        if (_result is null) return;
+        if (_reviewIndex + 1 < _result.Duplicates.Groups.Count)
+            JumpToGroup(_reviewIndex + 1);
+        else
+        {
+            _reviewIndex = _result.Duplicates.Groups.Count;
+            _questionIndex = 0;
+            _showSummary = false;
+        }
     }
     private void ResetDecisions()
     {
@@ -848,6 +916,8 @@
         _reviewIndex = 0;
         _questionIndex = 0;
         _showSummary = false;
+        _jumpIdentifier = "";
+        _jumpMessage = null;
         _confirmKeepRemaining = false;
         _confirmExact = false;
         _confirmRecoverable = false;
