@@ -170,6 +170,21 @@
                 <div class="gs-stat"><div class="gs-stat-label">Disagreements</div><div class="gs-stat-value">@CountKind(DuplicateGroupKind.Conflicting)</div></div>
                 <div class="gs-stat"><div class="gs-stat-label">Missing keys</div><div class="gs-stat-value">@_result.Report.RowsMissingMatchKeys</div></div>
             </div>
+            <div class="gs-category-summary" aria-label="Review completion by category">
+                @foreach (var category in new[] {
+                    (Kind: DuplicateGroupKind.Identical, Label: "Identical"),
+                    (Kind: DuplicateGroupKind.Complementary, Label: "Missing information"),
+                    (Kind: DuplicateGroupKind.Conflicting, Label: "Disagreements")
+                })
+                {
+                    var total = CountKind(category.Kind);
+                    var reviewed = CountReviewedKind(category.Kind);
+                    <div class="gs-category-row">
+                        <div class="gs-category-heading"><strong>@category.Label</strong><span>@reviewed of @total reviewed · @(total - reviewed) remaining</span></div>
+                        <progress value="@reviewed" max="@Math.Max(1, total)" aria-label="@($"{category.Label}: {reviewed} of {total} reviewed")"></progress>
+                    </div>
+                }
+            </div>
             <p class="gs-note">No records are consolidated without your approval.</p>
             @if (ExactPendingCount > 0)
             {
@@ -882,6 +897,11 @@
         if (required) _requiredColumns.Add(column);
         else _requiredColumns.Remove(column);
     }
+
+    private int CountReviewedKind(DuplicateGroupKind kind) => _result is null ? 0 :
+        _result.Duplicates.Groups.Count(group =>
+            DuplicateGroupClassifier.Classify(_result.Merged, group).Kind == kind &&
+            (_decisions.ContainsKey(group.RowIndices[0]) || _skipped.Contains(group.RowIndices[0])));
 
     private int CountKind(DuplicateGroupKind kind) => _result is null ? 0 :
         _result.Duplicates.Groups.Count(group => DuplicateGroupClassifier.Classify(_result.Merged, group).Kind == kind);
