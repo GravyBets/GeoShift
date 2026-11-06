@@ -434,10 +434,10 @@
     private sealed record CheckpointDecision(int Group, int Keep, Dictionary<string,int> Sources);
     private sealed record ReviewCheckpoint(string Fingerprint, List<CheckpointDecision> Decisions, List<int> Skipped, int Position);
     private string? _checkpointMessage;
-    private string DatasetFingerprint() => string.Join("|", _datasets.Select(d =>
+    private string DatasetFingerprint() => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("|", _datasets.Select(d =>
         d.Name + ":" + d.Rows.Count + ":" + d.KeyColumn + ":" +
         string.Join(",", d.Columns.Select(c => c + "=" + d.OutputNames[c])) + ":" +
-        string.Join(";", d.Rows.Select(r => string.Join(",", d.Columns.Select(c => r.TryGetValue(c, out var v) ? v : ""))))));
+        string.Join(";", d.Rows.Select(r => string.Join(",", d.Columns.Select(c => r.TryGetValue(c, out var v) ? v : ""))))))));
     private async Task SaveCheckpoint()
     {
         if (_result is null) return;
