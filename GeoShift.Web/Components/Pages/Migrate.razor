@@ -15,8 +15,15 @@
 
     <section class="gs-panel">
         <div class="gs-panel-heading"><h2>Import CSV or Excel files</h2><span class="gs-step">STEP 01</span></div>
-        <InputFile OnChange="LoadFiles" multiple accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled="@_busy" />
-        <p class="gs-note">Up to 3 CSV or XLSX files, 2 MB per file, 5,000 data rows per file. Excel uses the first worksheet; formula cells are not supported. Files are processed in memory for this preview.</p>
+        <div class="gs-dropzone" id="gs-migration-dropzone" role="button" tabindex="0" aria-label="Choose or drop up to three CSV or Excel files">
+            <div class="gs-upload-icon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V3m0 0L7 8m5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-3"/></svg></div>
+            <strong>Drag &amp; drop CSV or Excel files here</strong>
+            <p>Drop up to three files into this area, or select them from your computer</p>
+            <span class="gs-browse-btn" aria-hidden="true">Browse files <span>↗</span></span>
+            <small class="gs-upload-hint">CSV or XLSX · Up to 3 files · 2 MB each</small>
+            <InputFile @key="_fileInputKey" OnChange="LoadFiles" multiple accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled="@_busy" class="gs-hidden-file-input" aria-label="Select CSV or Excel files" />
+        </div>
+        <p class="gs-note mt-3">Up to 5,000 data rows per file. Excel uses the first worksheet; formula cells are not supported. Files are processed in memory for this preview.</p>
         @foreach (var dataset in _datasets)
         {
             <div class="gs-file-info"><strong>@dataset.Name</strong><span> · @dataset.Rows.Count rows</span></div>
@@ -506,6 +513,11 @@
     private MigrationWorkflowResult? _result;
     private string? _error;
     private bool _busy;
+    private int _fileInputKey;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await JS.InvokeVoidAsync("geoShiftSetupDropzone", "gs-migration-dropzone");
+    }
     private async Task DownloadCleaned()
     {
         if (_result is null) return;
