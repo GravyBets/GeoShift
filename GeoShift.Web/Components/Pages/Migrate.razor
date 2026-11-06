@@ -346,6 +346,23 @@
                     Restore saved decisions above, or confirm that you want to start a new review.
                 </div>
             }
+            @if (_result.Duplicates.Groups.Count > 0)
+            {
+                <div class="gs-review-filters" aria-label="Filter duplicate groups">
+                    @foreach (var option in new[] {
+                        ("all", "All", _result.Duplicates.Groups.Count),
+                        ("undecided", "Undecided", UnreviewedCount),
+                        ("identical", "Identical", CountKind(DuplicateGroupKind.Identical)),
+                        ("complementary", "Missing info", CountKind(DuplicateGroupKind.Complementary)),
+                        ("conflicting", "Disagreements", CountKind(DuplicateGroupKind.Conflicting)),
+                        ("combined", "Combined", _decisions.Count),
+                        ("separate", "Kept separate", _skipped.Count) })
+                    {
+                        <button type="button" class="btn btn-sm @(_reviewFilter == option.Item1 ? "btn-primary" : "btn-outline-secondary")"
+                                @onclick="() => SetReviewFilter(option.Item1)">@option.Item2 (@option.Item3)</button>
+                    }
+                </div>
+            }
             @if (_result.Duplicates.Groups.Count == 0)
             {
                 <p>No duplicate records found.</p>
@@ -368,6 +385,7 @@
                         <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="PreviousGroup" disabled="@(_reviewIndex == 0)">← Previous</button>
                         <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="NextGroup" disabled="@(_reviewIndex >= _result.Duplicates.Groups.Count - 1)">Next →</button>
                         <button type="button" class="btn btn-outline-primary btn-sm" @onclick="JumpToNextUnreviewed" disabled="@(UnreviewedCount == 0)">Next undecided</button>
+                        <button type="button" class="btn btn-outline-primary btn-sm" @onclick="NextFilteredGroup">Next in filter</button>
                     </div>
                 </div>
                 <div class="gs-review-jump">
@@ -464,6 +482,42 @@
     private bool _checkpointCleared;
     private bool _checkpointNeedsRestore;
     private bool _checkpointOverwriteConfirmed;
+    private string _reviewFilter = "all";
+    private bool CanChangeReview => !_checkpointNeedsRestore && !_restoringCheckpoint;
+    private bool MatchesReviewFilter(DuplicateGroup group)
+    {
+        if (_result is null) return false;
+        var id = group.RowIndices[0];
+        return _reviewFilter switch
+        {
+            "undecided" => !_decisions.ContainsKey(id) && !_skipped.Contains(id),
+            "identical" => DuplicateGroupClassifier.Classify(_result.Merged, group).Kind == DuplicateGroupKind.Identical,
+            "complementary" => DuplicateGroupClassifier.Classify(_result.Merged, group).Kind == DuplicateGroupKind.Complementary,
+            "conflicting" => DuplicateGroupClassifier.Classify(_result.Merged, group).Kind == DuplicateGroupKind.Conflicting,
+            "combined" => _decisions.ContainsKey(id),
+            "separate" => _skipped.Contains(id),
+            _ => true
+        };
+    }
+    private void SetReviewFilter(string filter)
+    {
+        _reviewFilter = filter;
+        if (_result is null) return;
+        var index = _result.Duplicates.Groups.ToList().FindIndex(MatchesReviewFilter);
+        if (index >= 0) JumpToGroup(index);
+        else _jumpMessage = "No groups match this filter.";
+    }
+    private void NextFilteredGroup()
+    {
+        if (_result is null) return;
+        var groups = _result.Duplicates.Groups;
+        for (var offset = 1; offset <= groups.Count; offset++)
+        {
+            var index = (_reviewIndex + offset) % groups.Count;
+            if (MatchesReviewFilter(groups[index])) { JumpToGroup(index); return; }
+        }
+        _jumpMessage = "No groups match this filter.";
+    }
     private string DatasetFingerprint()
     {
         var builder = new StringBuilder();
@@ -833,7 +887,7 @@
         _result.Duplicates.Groups.Count(g => !_decisions.ContainsKey(g.RowIndices[0]) && !_skipped.Contains(g.RowIndices[0]));
     private void KeepRemainingSeparate()
     {
-        if (_result is null || !_confirmKeepRemaining) return;
+        if (_result is null || !_confirmKeepRemaining || !CanChangeReview) return;
         foreach (var group in _result.Duplicates.Groups)
         {
             var id = group.RowIndices[0];
@@ -850,7 +904,7 @@
     private int ExactPendingCount => _result is null ? 0 : _result.Duplicates.Groups.Count(g => !g.HasConflicts && !_decisions.ContainsKey(g.RowIndices[0]) && !_skipped.Contains(g.RowIndices[0]));
     private void ApproveExactMatches()
     {
-        if (_result is null) return;
+        if (_result is null || !CanChangeReview) return;
         foreach (var group in _result.Duplicates.Groups.Where(g => !g.HasConflicts))
         {
             var id = group.RowIndices[0];
@@ -895,7 +949,7 @@
     private int RecoverablePendingCount => RecoverableProposals.Count;
     private void ApproveRecoverable()
     {
-        if (_result is null || !_confirmRecoverable) return;
+        if (_result is null || !_confirmRecoverable || !CanChangeReview) return;
         var proposals = RecoverableProposals;
         foreach (var proposal in proposals)
         {
@@ -934,7 +988,7 @@
 
     private void ChooseAnswer(int id, string column, int index)
     {
-        if (_result is null) return;
+        if (_result is null || !CanChangeReview) return;
         var group = _result.Duplicates.Groups[_reviewIndex];
         if (!group.RowIndices.Contains(index) || !group.ConflictingColumns.Contains(column)) return;
         _drafts[id].Sources[column] = index;
@@ -1001,6 +1055,7 @@
 
     private void Approve(int id)
     {
+        if (!CanChangeReview) return;
         var draft = _drafts[id];
         if (_result is null) return;
         var group = _result.Duplicates.Groups[_reviewIndex];
@@ -1015,6 +1070,7 @@
     private void Undo(int id) { _decisions.Remove(id); RefreshResolution(); }
     private void Skip(int id)
     {
+        if (!CanChangeReview) return;
         _decisions.Remove(id);
         _skipped.Add(id);
         RefreshResolution();
@@ -1039,6 +1095,7 @@
     }
     private void ResetDecisions()
     {
+        if (!CanChangeReview) return;
         _decisions.Clear();
         _skipped.Clear();
         _reviewIndex = 0;
