@@ -92,3 +92,9 @@ window.geoShiftMappingTemplates = {
     load: () => localStorage.getItem("geoshift.mappingTemplates.v1") || "[]",
     save: (json) => localStorage.setItem("geoshift.mappingTemplates.v1", json)
 };
+
+window.geoShiftReviewCheckpoint = {
+    save: json => sessionStorage.setItem("geoshift.review.v1", json),
+    load: () => sessionStorage.getItem("geoshift.review.v1"),
+    clear: () => sessionStorage.removeItem("geoshift.review.v1")
+};
