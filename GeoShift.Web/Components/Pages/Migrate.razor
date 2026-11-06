@@ -11,9 +11,15 @@
 <div class="gs-container gs-workspace">
     <div class="gs-page-kicker">DATA MIGRATION WORKSPACE</div>
     <h1 class="gs-page-title">Merge and review your data.</h1>
-    <p class="gs-page-description">Upload up to three CSV or Excel files, map equivalent identifier columns, and preview duplicates. This workspace never automatically removes records.</p>
+    <p class="gs-page-description">Import files, match columns, review duplicates, and export clean data. You decide which records to combine.</p>
+    <nav class="gs-workflow-nav" aria-label="Migration workflow">
+        <a href="#gs-import">1. Import</a>
+        <a href="#gs-match">2. Match</a>
+        <a href="#gs-report">3. Review</a>
+        <a href="#gs-export">4. Export</a>
+    </nav>
 
-    <section class="gs-panel">
+    <section class="gs-panel" id="gs-import">
         <div class="gs-panel-heading"><h2>Import CSV or Excel files</h2><span class="gs-step">STEP 01</span></div>
         <div class="gs-dropzone" id="gs-migration-dropzone" role="button" tabindex="0" aria-label="Choose or drop up to three CSV or Excel files">
             <div class="gs-upload-icon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V3m0 0L7 8m5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-3"/></svg></div>
@@ -32,7 +38,7 @@
 
     @if (_datasets.Count > 0)
     {
-        <section class="gs-panel">
+        <section class="gs-panel" id="gs-match">
             <div class="gs-panel-heading"><h2>Match identifier columns</h2><span class="gs-step">STEP 02</span></div>
             <p class="gs-note">Choose the column representing the same identifier in each file. For example, Site # and Location ID.</p>
             @foreach (var dataset in _datasets)
@@ -126,7 +132,7 @@
 
     @if (_result is not null)
     {
-        <section class="gs-panel">
+        <section class="gs-panel" id="gs-report">
             <div class="gs-panel-heading"><h2>Migration report</h2><span class="gs-step">STEP 03</span></div>
             <div class="gs-stats">
                 <div class="gs-stat"><div class="gs-stat-label">Imported</div><div class="gs-stat-value">@_result.Report.ImportedRows</div></div>
@@ -204,7 +210,9 @@
                     }
                 </div>
             }
-            <div class="gs-preview-table">
+            <details class="gs-secondary-details">
+                <summary>View sample duplicate groups (first 20)</summary>
+                <div class="gs-preview-table mt-3">
                 <table class="table table-hover">
                     <thead><tr><th>Identifier</th><th>Records</th><th>Review type</th><th>Fields to review</th></tr></thead>
                     <tbody>
@@ -219,7 +227,8 @@
                         }
                     </tbody>
                 </table>
-            </div>
+                </div>
+            </details>
         </section>
 
         <section class="gs-panel">
@@ -308,8 +317,8 @@
             }
             else if (ReviewComplete)
             {
-                <h3>You're all caught up!</h3>
-                <p>You've reviewed all @_result.Duplicates.Groups.Count duplicate groups.</p>
+                <h3>No duplicate decisions remaining</h3>
+                <p>All @_result.Duplicates.Groups.Count groups have been either combined or kept separate.</p>
                 <p><strong>@_decisions.Count</strong> combined · <strong>@_skipped.Count</strong> kept separate · <strong>@_result.Report.OutputRows</strong> records in the cleaned preview.</p>
                 <button class="btn btn-outline-secondary" @onclick="ReviewAgain">Review decisions</button>
             }
@@ -374,10 +383,8 @@
                 <p class="gs-note mt-4">@_decisions.Count confirmed · @_skipped.Count kept separate · @_result.Report.OutputRows output records</p>
             }
         </section>
-        @if (_result is not null)
-        {
-            <section class="gs-panel">
-                <div class="gs-panel-heading"><h2>Download your results</h2><span class="gs-step">STEP 05</span></div>
+        <section class="gs-panel">
+                <div class="gs-panel-heading" id="gs-export"><h2>Download your results</h2><span class="gs-step">STEP 05</span></div>
                 <p><strong>@_result.Report.ImportedRows imported → @_result.Report.OutputRows final records.</strong> @_decisions.Count groups combined; @_skipped.Count kept separate; @UnreviewedCount unreviewed. Original uploads remain unchanged.</p>
                 @if (UnreviewedCount > 0)
                 {
@@ -387,7 +394,6 @@
                 <button class="btn btn-outline-primary me-2 mb-2" @onclick="DownloadCorrections">Download correction audit</button>
                 <button class="btn btn-outline-primary mb-2" @onclick="DownloadAudit">Download audit report</button>
             </section>
-        }
     }
 </div>
 
@@ -842,6 +848,9 @@
         _reviewIndex = 0;
         _questionIndex = 0;
         _showSummary = false;
+        _confirmKeepRemaining = false;
+        _confirmExact = false;
+        _confirmRecoverable = false;
         try
         {
             var files = args.GetMultipleFiles(3);
