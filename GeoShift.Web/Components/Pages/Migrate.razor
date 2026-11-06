@@ -13,7 +13,7 @@
     <h1 class="gs-page-title">Merge and review your data.</h1>
     <p class="gs-page-description">Import files, match columns, review duplicates, and export clean data. You decide which records to combine.</p>
     <div class="gs-checkpoint-bar">
-        <button class="btn btn-outline-primary btn-sm" @onclick="RestoreCheckpoint">Restore saved decisions</button>
+        <button class="btn btn-outline-primary btn-sm" @onclick="RestoreCheckpoint" disabled="@(_result is null)">Restore saved decisions</button>
         @if (_result is not null)
         {
             <button class="btn btn-outline-secondary btn-sm" @onclick="SaveCheckpoint">Save review progress</button>
@@ -606,6 +606,7 @@
             _restoringCheckpoint = false;
             _checkpointCleared = false;
             _checkpointNeedsRestore = false;
+            _checkpointOverwriteConfirmed = false;
             _checkpointMessage = $"Restored {_decisions.Count} merges and {_skipped.Count} keep-separate decisions.";
         }
         catch (Exception) { _checkpointMessage = "Could not restore the saved review."; }
@@ -635,18 +636,18 @@
                 return;
             }
             var saved = JsonSerializer.Deserialize<ReviewCheckpoint>(json);
-            if (saved is null) return;
+            if (saved is null) { _checkpointMessage = "Saved review is unreadable. Clear it or confirm a fresh start."; return; }
             _checkpointNeedsRestore = true;
             _checkpointMessage = saved.Fingerprint == DatasetFingerprint()
                 ? "Saved review found for these files. Restore it or explicitly start a new review before changing decisions."
                 : "A saved review exists for different files or mappings. It will not be overwritten automatically.";
         }
-        catch (Exception) { _checkpointMessage = "Could not check existing saved review."; }
+        catch (Exception) { _checkpointNeedsRestore = true; _checkpointMessage = "Could not check saved review. Review changes remain paused."; }
     }
 
     private void StartFreshCheckpoint()
     {
-        if (!_checkpointOverwriteConfirmed) return;
+        if (!_checkpointOverwriteConfirmed || !_checkpointNeedsRestore) return;
         _checkpointNeedsRestore = false;
         _checkpointCleared = false;
         _checkpointOverwriteConfirmed = false;
@@ -1101,7 +1102,7 @@
         NextGroup();
     }
 
-    private void Undo(int id) { _decisions.Remove(id); RefreshResolution(); }
+    private void Undo(int id) { if (!CanChangeReview) return; _decisions.Remove(id); RefreshResolution(); }
     private void Skip(int id)
     {
         if (!CanChangeReview) return;
