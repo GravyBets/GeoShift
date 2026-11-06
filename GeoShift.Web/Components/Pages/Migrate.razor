@@ -398,12 +398,6 @@
                 var group = _result.Duplicates.Groups[Math.Min(_reviewIndex, _result.Duplicates.Groups.Count - 1)];
                 var id = group.RowIndices[0];
                 var draft = _drafts[id];
-                <div class="gs-review-filters" aria-label="Duplicate group filters">
-                    <button class="@FilterButtonClass("all")" @onclick='() => SetReviewFilter("all")'>All (@_result.Duplicates.Groups.Count)</button>
-                    <button class="@FilterButtonClass("identical")" @onclick='() => SetReviewFilter("identical")'>Identical (@CountKind(DuplicateGroupKind.Identical))</button>
-                    <button class="@FilterButtonClass("complementary")" @onclick='() => SetReviewFilter("complementary")'>Missing info (@CountKind(DuplicateGroupKind.Complementary))</button>
-                    <button class="@FilterButtonClass("conflicting")" @onclick='() => SetReviewFilter("conflicting")'>Disagreements (@CountKind(DuplicateGroupKind.Conflicting))</button>
-                </div>
                 <div class="gs-review-toolbar">
                     <div class="gs-page-kicker">DUPLICATE @(_reviewIndex + 1) OF @_result.Duplicates.Groups.Count · @UnreviewedCount undecided</div>
                     <div class="gs-review-actions">
@@ -918,30 +912,6 @@
         };
     }
 
-    private string _reviewFilter = "all";
-    private string FilterButtonClass(string filter) => _reviewFilter == filter
-        ? "btn btn-primary btn-sm" : "btn btn-outline-secondary btn-sm";
-    private bool MatchesReviewFilter(DuplicateGroup group) => _reviewFilter switch
-    {
-        "identical" => DuplicateGroupClassifier.Classify(_result!.Merged, group).Kind == DuplicateGroupKind.Identical,
-        "complementary" => DuplicateGroupClassifier.Classify(_result!.Merged, group).Kind == DuplicateGroupKind.Complementary,
-        "conflicting" => DuplicateGroupClassifier.Classify(_result!.Merged, group).Kind == DuplicateGroupKind.Conflicting,
-        _ => true
-    };
-    private void SetReviewFilter(string filter)
-    {
-        if (_result is null) return;
-        _reviewFilter = filter;
-        var groups = _result.Duplicates.Groups;
-        var index = Enumerable.Range(0, groups.Count)
-            .FirstOrDefault(i => MatchesReviewFilter(groups[i]) &&
-                !_decisions.ContainsKey(groups[i].RowIndices[0]) &&
-                !_skipped.Contains(groups[i].RowIndices[0]), -1);
-        if (index < 0) index = Enumerable.Range(0, groups.Count)
-            .FirstOrDefault(i => MatchesReviewFilter(groups[i]), -1);
-        if (index >= 0) JumpToGroup(index);
-        else _jumpMessage = "No groups match this filter.";
-    }
     private bool _confirmKeepRemaining;
     private int UnreviewedCount => _result is null ? 0 :
         _result.Duplicates.Groups.Count(g => !_decisions.ContainsKey(g.RowIndices[0]) && !_skipped.Contains(g.RowIndices[0]));
