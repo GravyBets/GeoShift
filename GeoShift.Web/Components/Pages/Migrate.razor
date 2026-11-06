@@ -143,7 +143,7 @@
                     }
                 }
             </details>
-            <button class="btn btn-primary" @onclick="RunPreview" disabled="@_busy">Preview migration →</button>
+            <button class="btn btn-primary" @onclick="PreviewAndCheckCheckpoint" disabled="@_busy">Preview migration →</button>
         </section>
     }
 
@@ -1153,6 +1153,12 @@
         _decisions.Clear();
     }
 
+    private async Task PreviewAndCheckCheckpoint()
+    {
+        RunPreview();
+        if (_result is not null) await CheckExistingCheckpoint();
+    }
+
     private void RunPreview()
     {
         _corrections.Clear();
@@ -1186,7 +1192,6 @@
             _requiredColumns.Add("GeoShift Match Key");
             _checkpointCleared = false;
             _checkpointNeedsRestore = true;
-            _ = InvokeAsync(CheckExistingCheckpoint);
             foreach (var group in _result.Duplicates.Groups)
                 _drafts.Add(group.RowIndices[0], new DraftDecision { KeepRow = group.RowIndices[0] });
         }
