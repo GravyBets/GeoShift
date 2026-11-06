@@ -380,7 +380,7 @@
             }
             else
             {
-                var group = _result.Duplicates.Groups[_reviewIndex];
+                var group = _result.Duplicates.Groups[Math.Min(_reviewIndex, _result.Duplicates.Groups.Count - 1)];
                 var id = group.RowIndices[0];
                 var draft = _drafts[id];
                 <div class="gs-review-filters" aria-label="Duplicate group filters">
@@ -636,7 +636,12 @@
                 return;
             }
             var saved = JsonSerializer.Deserialize<ReviewCheckpoint>(json);
-            if (saved is null) { _checkpointMessage = "Saved review is unreadable. Clear it or confirm a fresh start."; return; }
+            if (saved is null)
+            {
+                _checkpointNeedsRestore = true;
+                _checkpointMessage = "Saved review is unreadable. Clear it or confirm a fresh start.";
+                return;
+            }
             _checkpointNeedsRestore = true;
             _checkpointMessage = saved.Fingerprint == DatasetFingerprint()
                 ? "Saved review found for these files. Restore it or explicitly start a new review before changing decisions."
@@ -1007,7 +1012,8 @@
     private string? _jumpMessage;
     private int _questionIndex;
     private bool _showSummary;
-    private bool ReviewComplete => _result is not null && _reviewIndex >= _result.Duplicates.Groups.Count;
+    private bool ReviewComplete => _result is not null &&
+        _result.Duplicates.Groups.All(g => _decisions.ContainsKey(g.RowIndices[0]) || _skipped.Contains(g.RowIndices[0]));
     private readonly HashSet<int> _skipped = [];
 
     private sealed class DraftDecision
