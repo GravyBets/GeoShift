@@ -1,28 +1,39 @@
 @page "/"
-@inject NavigationManager Navigation
-
-<PageTitle>GeoShift — Convert KML &amp; KMZ to CSV</PageTitle>
+<PageTitle>GeoShift — Convert, Merge &amp; Clean Data</PageTitle>
 
 <section class="gs-hero">
     <div class="gs-hero-glow"></div>
     <div class="gs-container gs-hero-inner">
-        <div class="gs-eyebrow"><span class="gs-eyebrow-dot"></span> GEOSPATIAL DATA, SIMPLIFIED</div>
-        <h1>Your geographic data.<br /><span>Ready for anything.</span></h1>
-        <p class="gs-hero-lead">Turn Google Earth KML and KMZ files into clean, structured CSV data. Analyze, preview, and export in one streamlined workspace.</p>
+        <div class="gs-eyebrow"><span class="gs-eyebrow-dot"></span> DATA MIGRATION, MADE SIMPLE</div>
+        <h1>Messy data in.<br /><span>Useful data out.</span></h1>
+        <p class="gs-hero-lead">Convert geographic files, combine spreadsheets, recover missing information, and resolve duplicates—with a clear review process and downloadable audit trail.</p>
         <div class="gs-hero-actions">
-            <a class="gs-btn gs-btn-primary" href="/analyze">Open converter <span aria-hidden="true">↗</span></a>
-            <a class="gs-btn gs-btn-ghost" href="#how-it-works">See how it works <span aria-hidden="true">↓</span></a>
+            <a class="gs-btn gs-btn-primary" href="/migrate">Clean &amp; merge data <span aria-hidden="true">↗</span></a>
+            <a class="gs-btn gs-btn-ghost" href="/analyze">Convert KML / KMZ <span aria-hidden="true">↗</span></a>
         </div>
-        <div class="gs-hero-tags"><span>✓ KML &amp; KMZ</span><span>✓ Custom attributes</span><span>✓ Data-quality checks</span></div>
+        <div class="gs-hero-tags"><span>✓ CSV &amp; Excel</span><span>✓ KML &amp; KMZ</span><span>✓ Review before combining</span><span>✓ Export with an audit trail</span></div>
     </div>
     <div class="gs-orbit gs-orbit-one"></div><div class="gs-orbit gs-orbit-two"></div>
 </section>
 
 <section class="gs-container gs-features" id="how-it-works">
-    <div class="gs-section-heading"><div class="gs-eyebrow">THE WORKFLOW</div><h2>From map files to meaningful data.</h2><p>Everything you need to turn geographic exports into something you can work with.</p></div>
-    <div class="gs-feature-grid">
-        <article class="gs-feature"><span class="gs-feature-icon">01</span><h3>Upload &amp; analyze</h3><p>Understand your file's placemarks, geometry, and folders before converting.</p></article>
-        <article class="gs-feature"><span class="gs-feature-icon">02</span><h3>Preview with confidence</h3><p>Inspect your columns and see which records are included or skipped.</p></article>
-        <article class="gs-feature"><span class="gs-feature-icon">03</span><h3>Export clean CSV</h3><p>Preserve folder paths and custom fields in a spreadsheet-friendly format.</p></article>
+    <div class="gs-section-heading">
+        <div class="gs-eyebrow">CHOOSE YOUR WORKSPACE</div>
+        <h2>Two tools. One straightforward workflow.</h2>
+        <p>Start with the job you need done. Your original files remain unchanged.</p>
+    </div>
+    <div class="gs-feature-grid gs-workspace-grid">
+        <article class="gs-feature">
+            <span class="gs-feature-icon">01</span>
+            <h3>Clean &amp; merge data</h3>
+            <p>Bring CSV and Excel files together, match columns, review duplicate records, recover missing values, and export the results.</p>
+            <a class="gs-feature-link" href="/migrate">Open migration workspace ↗</a>
+        </article>
+        <article class="gs-feature">
+            <span class="gs-feature-icon">02</span>
+            <h3>Convert geographic files</h3>
+            <p>Analyze Google Earth KML and KMZ files, inspect placemarks and attributes, then convert supported point data to CSV.</p>
+            <a class="gs-feature-link" href="/analyze">Open converter ↗</a>
+        </article>
     </div>
 </section>
