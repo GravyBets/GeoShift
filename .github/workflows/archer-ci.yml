@@ -1,0 +1,24 @@
+name: GeoShift Archer CI
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+permissions:
+  contents: read
+jobs:
+  verify:
+    name: GeoShift build and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build Web
+        run: dotnet build GeoShift.Web/GeoShift.Web.csproj --configuration Release
+      - name: Run core regression tests
+        run: dotnet test GeoShift.Tests/GeoShift.Tests.csproj --configuration Release --logger "console;verbosity=normal"
